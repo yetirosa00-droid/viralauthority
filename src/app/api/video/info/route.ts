@@ -28,7 +28,20 @@ async function getBinaryPaths() {
   return "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
 }
 
-const COOKIES_PATH = process.env.COOKIES_PATH || "";
+function getCookiesPath() {
+  const envPath = process.env.COOKIES_PATH;
+  if (envPath && fs.existsSync(envPath)) return envPath;
+  
+  // Hardcoded production path fallback
+  const prodPath = "/var/www/viralauthoritypro/cookies.txt";
+  if (fs.existsSync(prodPath)) return prodPath;
+  
+  // Local path fallback
+  if (fs.existsSync("cookies.txt")) return "cookies.txt";
+  
+  return "";
+}
+
 const PUBLIC_ERROR = "No se pudo analizar el enlace. Verifica la URL.";
 
 type RawFormat = {
@@ -226,10 +239,11 @@ export async function POST(request: Request) {
   }
 
   const ytDlpPath = await getBinaryPaths();
+  const cookiesPath = getCookiesPath();
   const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings", "--no-check-certificate"];
 
-  if (COOKIES_PATH && fs.existsSync(COOKIES_PATH)) {
-    args.push("--cookies", COOKIES_PATH);
+  if (cookiesPath) {
+    args.push("--cookies", cookiesPath);
   }
 
   try {

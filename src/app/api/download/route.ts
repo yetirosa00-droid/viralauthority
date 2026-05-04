@@ -46,7 +46,20 @@ async function getBinaryPaths() {
   return { ytDlp, ffmpeg };
 }
 
-const COOKIES_PATH = process.env.COOKIES_PATH || "";
+function getCookiesPath() {
+  const envPath = process.env.COOKIES_PATH;
+  if (envPath && fs.existsSync(envPath)) return envPath;
+  
+  // Hardcoded production path fallback
+  const prodPath = "/var/www/viralauthoritypro/cookies.txt";
+  if (fs.existsSync(prodPath)) return prodPath;
+  
+  // Local path fallback
+  if (fs.existsSync("cookies.txt")) return "cookies.txt";
+  
+  return "";
+}
+
 const PATH_SEPARATOR = process.platform === "win32" ? "\\" : "/";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -152,6 +165,7 @@ function buildYtDlpArgs(params: {
   quality: unknown;
   outputTemplate: string;
   ffmpegPath: string;
+  cookiesPath: string;
 }) {
   const args: string[] = [];
 
@@ -177,8 +191,8 @@ function buildYtDlpArgs(params: {
 
   args.push("-o", params.outputTemplate, "--ffmpeg-location", params.ffmpegPath, "--no-playlist", "--no-check-certificate");
 
-  if (COOKIES_PATH && fs.existsSync(/*turbopackIgnore: true*/ COOKIES_PATH)) {
-    args.push("--cookies", COOKIES_PATH);
+  if (params.cookiesPath) {
+    args.push("--cookies", params.cookiesPath);
   }
 
   args.push(params.url);
@@ -225,6 +239,7 @@ export async function POST(req: NextRequest) {
     const internalBase = `download_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const outputTemplate = `${tempDir}${PATH_SEPARATOR}${internalBase}.%(ext)s`;
     const { ytDlp: ytDlpPath, ffmpeg: ffmpegPath } = await getBinaryPaths();
+    const cookiesPath = getCookiesPath();
     const args = buildYtDlpArgs({
       url,
       type,
@@ -234,6 +249,7 @@ export async function POST(req: NextRequest) {
       quality: body.quality,
       outputTemplate,
       ffmpegPath,
+      cookiesPath,
     });
 
     console.log("[ViralAuthority PRO PREMIUM Download Engine] Executing yt-dlp", {
