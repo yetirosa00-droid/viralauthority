@@ -259,6 +259,10 @@ export async function POST(request: Request) {
       stderr: getErrorStderr(error),
     });
 
-    return NextResponse.json({ error: PUBLIC_ERROR }, { status });
+    return NextResponse.json({ 
+      error: PUBLIC_ERROR, 
+      details: getErrorMessage(error),
+      stderr: getErrorStderr(error)
+    }, { status });
   }
 }
