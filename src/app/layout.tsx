@@ -2,7 +2,6 @@ import "./globals.css";
 import { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
@@ -52,7 +51,13 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.png", type: "image/png" }
+    ],
+    apple: [
+      { url: "/favicon.png", sizes: "180x180", type: "image/png" }
+    ],
   },
 };
 
