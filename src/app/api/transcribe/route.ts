@@ -13,8 +13,8 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const execFileAsync = promisify(execFile);
-const winYtDlp = "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
-const winFfmpeg = "C:/Users/georg/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-123778-g3b55818764-win64-gpl/bin/ffmpeg.exe";
+const winYtDlp = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe" : "yt-dlp";
+const winFfmpeg = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-123778-g3b55818764-win64-gpl/bin/ffmpeg.exe" : "ffmpeg";
 
 env.allowLocalModels = false;
 env.useBrowserCache = false;

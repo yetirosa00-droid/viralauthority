@@ -400,7 +400,7 @@ app.post('/download', async (req, res) => {
 
     console.log(`🛠️ [ViralAuthority PRO PREMIUM Engine] Executing: ${command}`);
 
-    exec(command, { shell: 'cmd.exe' }, (error, stdout, stderr) => {
+    exec(command, { shell: true }, (error, stdout, stderr) => {
       if (error) {
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Exec Error:", error);
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Stdout:", stdout);
@@ -410,7 +410,7 @@ app.post('/download', async (req, res) => {
         if (!isAudio && !command.includes('-f best')) {
           console.log("🔄 [ViralAuthority PRO PREMIUM Engine] Retrying with simple format...");
           const simpleCommand = `"${YT_DLP_BIN}" -f best --merge-output-format mp4 -o "${outputTemplate}" "${url}" --ffmpeg-location "${FFMPEG_BIN}"`;
-          return exec(simpleCommand, { shell: 'cmd.exe' }, (error2, stdout2, stderr2) => {
+          return exec(simpleCommand, { shell: true }, (error2, stdout2, stderr2) => {
             if (error2) {
                console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Exec Error:", error2);
                console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Stderr:", stderr2);
