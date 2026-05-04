@@ -22,12 +22,21 @@ export async function GET() {
   try {
     const ytDlpPath = await getBinaryPaths();
     const { stdout, stderr } = await execFileAsync(ytDlpPath, ["--version"], { timeout: 10000 });
+    const cookiesExists = fs.existsSync("/var/www/viralauthoritypro/cookies.txt");
+    const cookiesSize = cookiesExists ? fs.statSync("/var/www/viralauthoritypro/cookies.txt").size : 0;
+    
     return NextResponse.json({ 
       ytDlpPath, 
       version: stdout.trim(), 
       stderr: stderr.trim(),
+      cookies: {
+        exists: cookiesExists,
+        size: cookiesSize,
+        path: "/var/www/viralauthoritypro/cookies.txt"
+      },
       env: {
         YT_DLP_PATH: process.env.YT_DLP_PATH,
+        COOKIES_PATH: process.env.COOKIES_PATH,
         NODE_ENV: process.env.NODE_ENV
       }
     });
