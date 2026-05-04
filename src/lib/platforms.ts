@@ -86,9 +86,13 @@ function hostMatches(hostname: string, supportedHost: string) {
   return host === target || host.endsWith(`.${target}`);
 }
 
-export function detectSupportedPlatform(url: string) {
+export function detectSupportedPlatform(rawUrl: string) {
   try {
-    const parsed = new URL(url.trim());
+    let urlToParse = rawUrl.trim();
+    if (!/^https?:\/\//i.test(urlToParse)) {
+      urlToParse = `https://${urlToParse}`;
+    }
+    const parsed = new URL(urlToParse);
     const protocol = parsed.protocol.toLowerCase();
 
     if (protocol !== "http:" && protocol !== "https:") {
