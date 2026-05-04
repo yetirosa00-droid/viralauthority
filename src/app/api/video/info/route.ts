@@ -8,7 +8,26 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const execFileAsync = promisify(execFile);
-const YT_DLP_PATH = process.env.YT_DLP_PATH || "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
+
+async function getBinaryPaths() {
+  const envPath = process.env.YT_DLP_PATH;
+  if (envPath && fs.existsSync(envPath)) return envPath;
+  
+  // Common Linux paths
+  for (const p of ["/usr/local/bin/yt-dlp", "/usr/bin/yt-dlp"]) {
+    if (fs.existsSync(p)) return p;
+  }
+  
+  // Check in PATH
+  try {
+    const { stdout } = await execFileAsync("which", ["yt-dlp"]);
+    if (stdout.trim()) return stdout.trim();
+  } catch {}
+  
+  // Default/Windows fallback
+  return "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
+}
+
 const COOKIES_PATH = process.env.COOKIES_PATH || "";
 const PUBLIC_ERROR = "No se pudo analizar el enlace. Verifica la URL.";
 
@@ -206,14 +225,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings"];
+  const ytDlpPath = await getBinaryPaths();
+  const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings", "--no-check-certificate"];
 
   if (COOKIES_PATH && fs.existsSync(COOKIES_PATH)) {
     args.push("--cookies", COOKIES_PATH);
   }
 
   try {
-    const { stdout } = await execFileAsync(YT_DLP_PATH, args, {
+    const { stdout } = await execFileAsync(ytDlpPath, args, {
       timeout: 45_000,
       maxBuffer: 1024 * 1024 * 16,
       windowsHide: true,

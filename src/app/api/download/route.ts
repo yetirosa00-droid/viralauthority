@@ -10,8 +10,42 @@ export const maxDuration = 300;
 
 const execFileAsync = promisify(execFile);
 
-const YT_DLP_PATH = process.env.YT_DLP_PATH || "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
-const FFMPEG_PATH = process.env.FFMPEG_PATH || "C:/Users/georg/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-123778-g3b55818764-win64-gpl/bin/ffmpeg.exe";
+async function getBinaryPaths() {
+  const ytDlpEnv = process.env.YT_DLP_PATH;
+  const ffmpegEnv = process.env.FFMPEG_PATH;
+  
+  let ytDlp = ytDlpEnv && fs.existsSync(ytDlpEnv) ? ytDlpEnv : "";
+  let ffmpeg = ffmpegEnv && fs.existsSync(ffmpegEnv) ? ffmpegEnv : "";
+
+  if (!ytDlp) {
+    for (const p of ["/usr/local/bin/yt-dlp", "/usr/bin/yt-dlp"]) {
+      if (fs.existsSync(p)) { ytDlp = p; break; }
+    }
+    if (!ytDlp) {
+      try {
+        const { stdout } = await execFileAsync("which", ["yt-dlp"]);
+        ytDlp = stdout.trim();
+      } catch {}
+    }
+    if (!ytDlp) ytDlp = "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe";
+  }
+
+  if (!ffmpeg) {
+    for (const p of ["/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]) {
+      if (fs.existsSync(p)) { ffmpeg = p; break; }
+    }
+    if (!ffmpeg) {
+      try {
+        const { stdout } = await execFileAsync("which", ["ffmpeg"]);
+        ffmpeg = stdout.trim();
+      } catch {}
+    }
+    if (!ffmpeg) ffmpeg = "C:/Users/georg/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-123778-g3b55818764-win64-gpl/bin/ffmpeg.exe";
+  }
+
+  return { ytDlp, ffmpeg };
+}
+
 const COOKIES_PATH = process.env.COOKIES_PATH || "";
 const PATH_SEPARATOR = process.platform === "win32" ? "\\" : "/";
 
@@ -117,6 +151,7 @@ function buildYtDlpArgs(params: {
   height?: number;
   quality: unknown;
   outputTemplate: string;
+  ffmpegPath: string;
 }) {
   const args: string[] = [];
 
@@ -140,7 +175,7 @@ function buildYtDlpArgs(params: {
     args.push("-f", format, "--merge-output-format", "mp4");
   }
 
-  args.push("-o", params.outputTemplate, "--ffmpeg-location", FFMPEG_PATH, "--no-playlist");
+  args.push("-o", params.outputTemplate, "--ffmpeg-location", params.ffmpegPath, "--no-playlist", "--no-check-certificate");
 
   if (COOKIES_PATH && fs.existsSync(/*turbopackIgnore: true*/ COOKIES_PATH)) {
     args.push("--cookies", COOKIES_PATH);
@@ -189,6 +224,7 @@ export async function POST(req: NextRequest) {
     const tempDir = getTempDir();
     const internalBase = `download_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const outputTemplate = `${tempDir}${PATH_SEPARATOR}${internalBase}.%(ext)s`;
+    const { ytDlp: ytDlpPath, ffmpeg: ffmpegPath } = await getBinaryPaths();
     const args = buildYtDlpArgs({
       url,
       type,
@@ -197,6 +233,7 @@ export async function POST(req: NextRequest) {
       height,
       quality: body.quality,
       outputTemplate,
+      ffmpegPath,
     });
 
     console.log("[ViralAuthority PRO PREMIUM Download Engine] Executing yt-dlp", {
@@ -206,7 +243,7 @@ export async function POST(req: NextRequest) {
       requestedExt: requestedExt || "auto",
     });
 
-    await execFileAsync(YT_DLP_PATH, args, {
+    await execFileAsync(ytDlpPath, args, {
       timeout: 240_000,
       maxBuffer: 1024 * 1024 * 8,
       windowsHide: true,
