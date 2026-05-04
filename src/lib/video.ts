@@ -50,11 +50,7 @@ export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
       };
     }
 
-    const apiUrl = getApiUrl();
-    const endpoint = apiUrl.endsWith("/") 
-      ? `${apiUrl}${VIDEO_INFO_ENDPOINT.substring(1)}` 
-      : `${apiUrl}${VIDEO_INFO_ENDPOINT}`;
-
+    const endpoint = "/api/video/info";
     console.log(`[ViralAuthority] Fetching from: ${endpoint}`);
 
     const response = await axios.post(

@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import fs from "fs";
 import { NextResponse } from "next/server";
 import { detectSupportedPlatform, UNSUPPORTED_LINK_ERROR } from "@/lib/platforms";
 
@@ -207,7 +208,7 @@ export async function POST(request: Request) {
 
   const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings"];
 
-  if (COOKIES_PATH) {
+  if (COOKIES_PATH && fs.existsSync(COOKIES_PATH)) {
     args.push("--cookies", COOKIES_PATH);
   }
 
