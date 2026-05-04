@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.viralauthoritypro.com"),
+  metadataBase: new URL("https://viralauthoritypro.com"),
   title: "ViralAuthority PRO PREMIUM - Multimedia, AI, Transcription and Digital Archive Tools",
   description: "Professional platform for multimedia management, AI transcription, image editing, audio workflows and responsible digital archive for personal or educational reference.",
   keywords: ["multimedia management", "digital archive", "ai transcription", "image editor online", "video to text", "creator tools", "offline reference", "ViralAuthority PRO PREMIUM"],
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ViralAuthority PRO PREMIUM - AI Multimedia Suite",
     description: "Manage multimedia references, edit images, and transcribe audio with AI in a responsible creator workflow.",
-    url: "https://www.viralauthoritypro.com",
+    url: "https://viralauthoritypro.com",
     siteName: "ViralAuthority PRO PREMIUM",
     images: [
       {
@@ -36,10 +36,10 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
   alternates: {
-    canonical: "https://www.viralauthoritypro.com",
+    canonical: "https://viralauthoritypro.com",
     languages: {
-      "en-US": "https://www.viralauthoritypro.com",
-      "es-ES": "https://www.viralauthoritypro.com",
+      "en-US": "https://viralauthoritypro.com",
+      "es-ES": "https://viralauthoritypro.com",
     },
   },
   robots: {
