@@ -57,8 +57,10 @@ jobs:
           script: |
             cd /var/www/viralauthoritypro
             
-            # Fix Nginx
+            # Fix Nginx (Isolate site)
             mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo rm -f /etc/nginx/sites-enabled/vytrixe*
             cp infra/nginx.conf /etc/nginx/sites-available/viralauthoritypro
             ln -sf /etc/nginx/sites-available/viralauthoritypro /etc/nginx/sites-enabled/
             
@@ -80,7 +82,7 @@ jobs:
             # Install Certbot and generate SSL
             sudo apt-get update
             sudo apt-get install -y certbot python3-certbot-nginx
-            sudo certbot --nginx -d viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect || true
+            sudo certbot --nginx -d viralauthoritypro.com -d www.viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect || true
             
             # Final Nginx restart and status check
             sudo nginx -t && sudo systemctl restart nginx
