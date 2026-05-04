@@ -34,6 +34,7 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
+          timeout: 20m
           script: |
             mkdir -p /var/www/viralauthoritypro
             chown -R root:root /var/www/viralauthoritypro
@@ -54,6 +55,7 @@ jobs:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
+          timeout: 30m
           script: |
             cd /var/www/viralauthoritypro
             
@@ -79,9 +81,7 @@ jobs:
             pm2 delete vpro-app || true
             pm2 start npm --name "vpro-app" -- start -- -p 3000
             
-            # Install Certbot and generate SSL
-            sudo apt-get update
-            sudo apt-get install -y certbot python3-certbot-nginx
+            # Link SSL (Already installed by setup_vps.sh)
             sudo certbot --nginx -d viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect --expand || true
             
             # Final Nginx restart and status check

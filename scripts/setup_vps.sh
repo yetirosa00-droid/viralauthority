@@ -19,7 +19,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 # Update system
 echo "📦 [2/8] Updating system packages..."
-sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get update
 sudo apt-get install -y curl wget git build-essential python3 python3-pip python-is-python3 ffmpeg
 
 # Install Node.js (Latest LTS - 20.x or 22.x)
