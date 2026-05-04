@@ -37,6 +37,8 @@ jobs:
           timeout: 20m
           script: |
             mkdir -p /var/www/viralauthoritypro
+            # Clean up old files but keep the directory
+            find /var/www/viralauthoritypro -mindepth 1 -maxdepth 1 ! -name 'cookies.txt' -exec rm -rf {} +
             chown -R root:root /var/www/viralauthoritypro
 
       - name: Upload code to VPS
@@ -47,7 +49,7 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           source: "./*, !node_modules, !.git, !.github"
           target: "/var/www/viralauthoritypro"
-          rm: true
+          rm: false
 
       - name: Run setup and restart services
         uses: appleboy/ssh-action@v1.0.3
