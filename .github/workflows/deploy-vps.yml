@@ -20,8 +20,8 @@ jobs:
 
       - name: Install dependencies & Build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: "https://mock.supabase.co"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "mock-key"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           npm ci
           npm run build
@@ -29,9 +29,9 @@ jobs:
       - name: Copy files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 208.87.241.149
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
           source: "./*, !node_modules, !.git, !.github"
           target: "/var/www/viralauthoritypro"
           rm: false
@@ -39,9 +39,9 @@ jobs:
       - name: Run setup and restart services
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 208.87.241.149
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www/viralauthoritypro
             
