@@ -91,13 +91,23 @@ jobs:
             sudo certbot --nginx -d viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect --expand || true
             
             # Final Nginx restart and status check
-            sudo nginx -t && sudo systemctl restart nginx
+            echo "🔧 [DIAGNOSTIC] Checking Nginx configuration..."
+            sudo nginx -t
+            sudo nginx -T | grep "server_name" # Show all active server names
+            
+            sudo systemctl restart nginx
             
             # Health Checks
             echo "🔍 [DIAGNOSTIC] Checking local ports..."
             curl -I http://localhost:3000 || echo "❌ Frontend NOT responding on port 3000"
             curl -I http://localhost:3001/health || echo "❌ Backend NOT responding on port 3001"
             
+            # Final check of the public-facing port 80
+            echo "🌐 [DIAGNOSTIC] Checking port 80 (Nginx Proxy)..."
+            curl -I http://localhost || echo "❌ Nginx NOT responding on port 80"
+            
             pm2 list
-            systemctl status nginx --no-pager
+            sudo systemctl status nginx --no-pager
+            sudo journalctl -u nginx --no-pager -n 20
+
 

@@ -62,7 +62,9 @@ sudo ufw allow 'Nginx Full' || true
 sudo ufw allow 22 || true
 sudo ufw allow 3000 || true
 sudo ufw allow 3001 || true
-# sudo ufw --force enable
+sudo ufw --force enable
+sudo ufw status verbose
+
 
 # Final Status
 echo "✅ [8/8] Base environment ready!"
