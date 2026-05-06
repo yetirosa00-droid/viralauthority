@@ -56,18 +56,24 @@ else
     echo "🌐 [6/8] Nginx already installed."
 fi
 
-# Configure Firewall
-echo "🛡️ [7/8] Configuring Firewall (UFW)..."
-sudo ufw allow 'Nginx Full' || true
-sudo ufw allow 22 || true
-sudo ufw allow 3000 || true
-sudo ufw allow 3001 || true
+# Configure Tools & Security
+echo "🛡️ [7/8] Configuring Security (Fail2Ban & UFW)..."
+sudo apt-get install -y fail2ban certbot python3-certbot-nginx
+
+# Configure UFW
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw --force enable
 sudo ufw status verbose
 
+# Configure PM2 to start on boot
+echo "🚀 [8/8] Finalizing PM2..."
+pm2 startup | grep "sudo" | bash || true
+pm2 save
 
 # Final Status
-echo "✅ [8/8] Base environment ready!"
+echo "✅ [SUCCESS] Base environment ready for Production!"
 echo "----------------------------------------------------"
 echo "Node: $(node -v)"
 echo "NPM: $(npm -v)"

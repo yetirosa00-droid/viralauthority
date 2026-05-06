@@ -15,38 +15,20 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: 'npm'
 
       - name: Install dependencies & Build
         run: |
-          npm install
+          npm ci
           npm run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_API_URL: https://api.viralauthoritypro.com
-          NEXT_PUBLIC_APP_URL: https://viralauthoritypro.com
-          NEXT_PUBLIC_PAYPAL_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_PAYPAL_CLIENT_ID }}
 
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          timeout: 20m
-          script: |
-            mkdir -p /var/www/viralauthoritypro
-            # Clean up old files but keep the directory
-            find /var/www/viralauthoritypro -mindepth 1 -maxdepth 1 ! -name 'cookies.txt' -exec rm -rf {} +
-            chown -R root:root /var/www/viralauthoritypro
-
-      - name: Upload code to VPS
+      - name: Copy files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
+          host: 208.87.241.149
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
           source: "./*, !node_modules, !.git, !.github"
           target: "/var/www/viralauthoritypro"
           rm: false
@@ -54,60 +36,41 @@ jobs:
       - name: Run setup and restart services
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          timeout: 30m
+          host: 208.87.241.149
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /var/www/viralauthoritypro
             
-            # Fix Nginx (Isolate site)
-            mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo rm -f /etc/nginx/sites-enabled/vytrixe*
-            cp infra/nginx.conf /etc/nginx/sites-available/viralauthoritypro
-            ln -sf /etc/nginx/sites-available/viralauthoritypro /etc/nginx/sites-enabled/
-            
-            # Setup environment
-            chmod +x scripts/setup_vps.sh
+            # Fix Backend deps
+            cd backend && npm install && cd ..
+
+            # Setup base env
+            chmod +x ./scripts/setup_vps.sh
             ./scripts/setup_vps.sh
+
+            # Move and configure Nginx
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo cp infra/nginx.conf /etc/nginx/sites-available/viralauthoritypro
+            sudo ln -sf /etc/nginx/sites-available/viralauthoritypro /etc/nginx/sites-enabled/
             
-            # Backend
-            cd backend && npm install
-            pm2 delete vpro-api || true
-            pm2 start index.js --name "vpro-api"
-            
-            # Frontend (Already built on GitHub, just install prod deps and start)
-            cd ..
-            npm install --production
-            pm2 delete vpro-app || true
-            pm2 start npm --name "vpro-app" -- start -- -p 3000
-            
-            # Wait for services to start
-            echo "⏳ Waiting for services to initialize..."
-            sleep 10
-            
-            # Link SSL (Already installed by setup_vps.sh)
-            sudo certbot --nginx -d viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect --expand || true
-            
+            # PM2 Setup
+            pm2 delete vpro-api vpro-app || true
+            pm2 start backend/index.js --name vpro-api
+            pm2 start npm --name vpro-app -- start
+            pm2 save
+
+            # SSL Setup (Certbot)
+            echo "🔐 Generating/Renewing SSL..."
+            sudo certbot --nginx -d viralauthoritypro.com -d www.viralauthoritypro.com -d api.viralauthoritypro.com --non-interactive --agree-tos --email webmaster@viralauthoritypro.com --redirect --expand || true
+
             # Final Nginx restart and status check
-            echo "🔧 [DIAGNOSTIC] Checking Nginx configuration..."
-            sudo nginx -t
-            sudo nginx -T | grep "server_name" # Show all active server names
-            
-            sudo systemctl restart nginx
+            sudo nginx -t && sudo systemctl restart nginx
             
             # Health Checks
-            echo "🔍 [DIAGNOSTIC] Checking local ports..."
-            curl -I http://localhost:3000 || echo "❌ Frontend NOT responding on port 3000"
-            curl -I http://localhost:3001/health || echo "❌ Backend NOT responding on port 3001"
-            
-            # Final check of the public-facing port 80
-            echo "🌐 [DIAGNOSTIC] Checking port 80 (Nginx Proxy)..."
-            curl -I http://localhost || echo "❌ Nginx NOT responding on port 80"
+            echo "🔍 [DIAGNOSTIC] Checking services..."
+            curl -I http://localhost:3000
+            curl -I http://localhost:3001/health
             
             pm2 list
             sudo systemctl status nginx --no-pager
-            sudo journalctl -u nginx --no-pager -n 20
-
-
