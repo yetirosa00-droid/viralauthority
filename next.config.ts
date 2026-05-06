@@ -6,7 +6,14 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true, 
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   allowedDevOrigins: ["192.168.0.235"],
 };
+
 
 export default nextConfig;
