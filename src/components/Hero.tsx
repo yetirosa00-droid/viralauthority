@@ -45,6 +45,17 @@ export function Hero({ onSearch, isLoading, externalUrl }: HeroProps) {
             transition={{ duration: 0.6 }}
             className="max-w-5xl mx-auto"
           >
+            <div className="mb-12 flex justify-center">
+              <motion.img 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                src="/logo.png" 
+                alt="ViralAuthority PRO Logo" 
+                className="w-24 h-24 sm:w-32 sm:h-32 object-contain drop-shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+              />
+            </div>
+
             <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-6 py-2 text-xs font-black text-blue-400 uppercase tracking-widest shadow-2xl backdrop-blur-md">
               <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
               ViralAuthority PRO PREMIUM v1.0

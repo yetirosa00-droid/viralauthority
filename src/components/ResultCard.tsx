@@ -112,19 +112,39 @@ export function ResultCard({ info, videoUrl, onReset }: ResultCardProps) {
         setTimeout(() => setSuccessMessage(null), 8000);
       }, 3000);
 
-    } catch (err: unknown) {
+    } catch (err: any) {
       clearInterval(interval);
       setDownloadingId(null);
       setProgress(0);
       setStatusText("Error");
       
       console.error("API ERROR:", err);
-      const message = err instanceof Error ? err.message : "Failed to start download. Please try a different quality or link.";
-      alert(message);
       
+      let message = "No se pudo iniciar la descarga.";
+      let details = "";
+
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        if (err.response.status === 404) {
+          message = "Video no encontrado o no disponible.";
+          details = "El motor no pudo localizar el recurso. Verifica que el enlace sea público y accesible.";
+        } else if (err.response.status === 500) {
+          message = "Error interno del motor de descarga.";
+          details = "El servidor de procesamiento tuvo un problema técnico. Intenta con otra calidad.";
+        } else if (err.response.status === 504) {
+          message = "Tiempo de espera agotado (Gateway Timeout).";
+          details = "El procesamiento está tardando demasiado. Los servidores pueden estar saturados.";
+        }
+      } else if (err.request) {
+        message = "Sin respuesta del servidor.";
+        details = "No se pudo establecer conexión con el motor de ViralAuthority PRO. Revisa tu conexión.";
+      } else {
+        message = err.message || "Error desconocido en la solicitud.";
+      }
+
       setError({
         message,
-        details: typeof err === "object" && err !== null && "details" in err && typeof err.details === "string" ? err.details : undefined
+        details: details || (err.response?.data?.error || err.message)
       });
     }
   };

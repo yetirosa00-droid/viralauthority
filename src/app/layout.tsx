@@ -9,21 +9,21 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://viralauthoritypro.com"),
-  title: "ViralAuthority PRO PREMIUM - Multimedia, AI, Transcription and Digital Archive Tools",
-  description: "Professional platform for multimedia management, AI transcription, image editing, audio workflows and responsible digital archive for personal or educational reference.",
-  keywords: ["multimedia management", "digital archive", "ai transcription", "image editor online", "video to text", "creator tools", "offline reference", "ViralAuthority PRO PREMIUM"],
-  authors: [{ name: "ViralAuthority PRO PREMIUM Team" }],
+  title: "ViralAuthority PRO PREMIUM - AI Multimedia Suite",
+  description: "The ultimate professional platform for multimedia processing, AI transcription, and digital archiving. Secure, fast, and optimized for creators.",
+  keywords: ["multimedia engine", "ai transcription", "video downloader pro", "digital archive", "ViralAuthority PRO"],
+  authors: [{ name: "ViralAuthority PRO Team" }],
   openGraph: {
     title: "ViralAuthority PRO PREMIUM - AI Multimedia Suite",
-    description: "Manage multimedia references, edit images, and transcribe audio with AI in a responsible creator workflow.",
+    description: "Professional multimedia processing and AI transcription engine.",
     url: "https://viralauthoritypro.com",
     siteName: "ViralAuthority PRO PREMIUM",
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "ViralAuthority PRO PREMIUM Platform Preview",
+        url: "/logo.png",
+        width: 1024,
+        height: 1024,
+        alt: "ViralAuthority PRO PREMIUM Logo",
       },
     ],
     locale: "en_US",
@@ -31,9 +31,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ViralAuthority PRO PREMIUM - AI Multimedia Suite",
-    description: "Multimedia management, AI editing and transcription for responsible creator workflows.",
-    images: ["/og-image.png"],
+    title: "ViralAuthority PRO PREMIUM",
+    description: "Professional AI Multimedia Suite for modern creators.",
+    images: ["/logo.png"],
   },
   alternates: {
     canonical: "https://viralauthoritypro.com",
@@ -52,8 +52,8 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico" },
-      { url: "/favicon.png", type: "image/png" }
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/logo.png", type: "image/png" }
     ],
     apple: [
       { url: "/favicon.png", sizes: "180x180", type: "image/png" }

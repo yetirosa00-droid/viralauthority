@@ -33,22 +33,40 @@ function sanitizeFileName(name) {
 // Load environment variables from the root .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const YT_DLP_BIN = process.env.YT_DLP_PATH || 'yt-dlp';
-const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
+// Robust Binary Discovery
+const getBinPath = (binName) => {
+  const envPath = process.env[binName.toUpperCase() + '_PATH'];
+  if (envPath && fs.existsSync(envPath)) return envPath;
+  
+  // Common Linux paths for production
+  if (process.platform !== 'win32') {
+    const linuxPaths = [
+      `/usr/local/bin/${binName}`,
+      `/usr/bin/${binName}`,
+      path.join(__dirname, binName),
+      path.join(process.cwd(), binName)
+    ];
+    for (const p of linuxPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  
+  return binName; // Fallback to PATH
+};
+
+const YT_DLP_BIN = getBinPath('yt-dlp');
+const FFMPEG_BIN = getBinPath('ffmpeg');
 const COOKIES_PATH = process.env.COOKIES_PATH || path.join(__dirname, 'cookies.txt');
 
-console.log(`🔍 [ViralAuthority PRO PREMIUM Engine] Using yt-dlp: ${YT_DLP_BIN}`);
-console.log(`🔍 [ViralAuthority PRO PREMIUM Engine] Using FFmpeg: ${FFMPEG_BIN}`);
+console.log(`🔍 [ViralAuthority Engine] YT-DLP: ${YT_DLP_BIN}`);
+console.log(`🔍 [ViralAuthority Engine] FFmpeg: ${FFMPEG_BIN}`);
 
 let cookiesActive = false;
 if (fs.existsSync(COOKIES_PATH)) {
-  console.log(`🍪 [ViralAuthority PRO PREMIUM Engine] Archivo cookies.txt VIP detectado. ¡Descarga de Estados (Stories) habilitada!`);
+  console.log(`🍪 [ViralAuthority Engine] Cookies detected!`);
   cookiesActive = true;
-} else {
-  console.log(`👀 [ViralAuthority PRO PREMIUM Engine] No se detectó cookies.txt. Módulo operando en "Modo Público Normal".`);
 }
 
-// Create a wrapper for yt-dlp that always includes the ffmpeg location
 const ytDlpWrapper = createYtDlp(YT_DLP_BIN);
 
 function getYtDlpArgs(customArgs = {}) {
