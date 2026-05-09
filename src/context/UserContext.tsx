@@ -128,13 +128,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (currentUser && typeof window !== "undefined") {
       const pendingPro = localStorage.getItem("pending_pro");
       if (pendingPro) {
-        console.log("[ViralAuthority PRO PREMIUM Auth] Found pending Pro activation! Applying now...");
+        console.log("[ViralAuthority PRO PREMIUM Auth] 💎 Found pending Pro activation! Synchronizing with account...");
         try {
-          await setPremiumStatusInDB(true);
-          localStorage.removeItem("pending_pro");
-          console.log("[ViralAuthority PRO PREMIUM Auth] Pro status successfully applied to newly logged in user.");
+          // Give the DB a moment to settle after login
+          setTimeout(async () => {
+            try {
+              await setPremiumStatusInDB(true);
+              localStorage.removeItem("pending_pro");
+              console.log("[ViralAuthority PRO PREMIUM Auth] ✅ Pro status successfully applied to account.");
+              // Force refresh the page to update all UI components
+              window.location.reload();
+            } catch (err) {
+              console.error("[ViralAuthority PRO PREMIUM Auth] ❌ Error applying Pro status to DB:", err);
+            }
+          }, 1000);
         } catch (err) {
-          console.error("[ViralAuthority PRO PREMIUM Auth] Failed to apply pending Pro status:", err);
+          console.error("[ViralAuthority PRO PREMIUM Auth] ❌ Failed to initiate pending Pro status application:", err);
         }
       }
     }

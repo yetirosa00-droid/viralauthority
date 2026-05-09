@@ -26,8 +26,6 @@ import {
   PayPalButtons 
 } from "@paypal/react-paypal-js";
 
-
-
 export default function PremiumPage() {
   const { t } = useLanguage();
   const { user, isPremium, setPremiumStatusInDB, openLoginModal } = useUser();
@@ -44,7 +42,7 @@ export default function PremiumPage() {
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim();
   const planAmount = billingCycle === "yearly" ? "94.99" : "14.99";
 
-  const handlePaymentSuccess = async (details: unknown) => {
+  const handlePaymentSuccess = async (details: any) => {
     console.log("Payment Successful:", details);
     setLoading(true);
     try {
@@ -52,14 +50,13 @@ export default function PremiumPage() {
         await setPremiumStatusInDB(true);
         setIsSuccess(true);
       } else {
-        // Save pending activation for when they login
         localStorage.setItem("pending_pro", JSON.stringify(details));
         alert("¡Pago recibido con éxito! Por favor, inicia sesión ahora para activar tus funciones Pro automáticamente.");
         openLoginModal();
       }
     } catch (err) {
       console.error(err);
-      alert("Error activating Pro status. Please contact support.");
+      alert("Error al activar el estado Pro. Por favor, contacta con soporte.");
     } finally {
       setLoading(false);
     }
@@ -93,16 +90,16 @@ export default function PremiumPage() {
               <Sparkles size={48} />
             </div>
             <div className="space-y-4">
-              <h1 className="text-3xl font-black uppercase italic tracking-tighter">Welcome Pro</h1>
+              <h1 className="text-3xl font-black uppercase italic tracking-tighter">Bienvenido Pro</h1>
               <p className="text-gray-400 font-medium leading-relaxed">
-                Your account is now fully elevated. All Pro tools are unlocked and waiting for you.
+                Tu cuenta ha sido elevada a Premium con éxito. Todas las herramientas Pro están desbloqueadas.
               </p>
             </div>
             <a 
               href="/dashboard"
               className="block w-full py-5 bg-white text-black rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
             >
-              Enter Dashboard
+              Ir al Panel de Control
             </a>
           </motion.div>
         </main>
@@ -118,7 +115,6 @@ export default function PremiumPage() {
       <main className="container mx-auto px-4 py-12 lg:py-24">
         <div className="max-w-6xl mx-auto space-y-16">
           
-          {/* Hero Section */}
           <section className="text-center space-y-8">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -150,7 +146,6 @@ export default function PremiumPage() {
               {t("premium_subtitle")}
             </motion.p>
 
-            {/* Plan Toggle */}
             <div className="flex items-center justify-center gap-4 pt-8">
               <span className={`text-sm font-bold uppercase tracking-widest ${billingCycle === "monthly" ? "text-white" : "text-gray-500"}`}>{t("premium_monthly")}</span>
               <button 
@@ -170,10 +165,8 @@ export default function PremiumPage() {
             </div>
           </section>
 
-          {/* Pricing Card & Checkout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
             
-            {/* Subscription Card */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -185,7 +178,7 @@ export default function PremiumPage() {
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <h3 className="text-sm font-bold uppercase tracking-widest text-blue-500">
-                        {billingCycle === "monthly" ? "Monthly Plan" : "Yearly Plan"}
+                        {billingCycle === "monthly" ? "Plan Mensual" : "Plan Anual"}
                       </h3>
                       <p className="text-5xl font-black italic tracking-tighter">
                         {billingCycle === "monthly" ? t("premium_price") : t("premium_annual_price")}
@@ -214,12 +207,11 @@ export default function PremiumPage() {
 
                 <div className="mt-12 pt-8 border-t border-white/10 flex items-center gap-3">
                   <ShieldCheck className="text-emerald-500" size={20} />
-                  <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Secure 256-bit encrypted checkout</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Pago seguro encriptado de 256 bits</span>
                 </div>
               </div>
             </motion.div>
 
-            {/* Payment Gateway */}
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -227,8 +219,8 @@ export default function PremiumPage() {
             >
               <div className="text-center space-y-2">
                 <ShieldCheck size={32} className="mx-auto text-emerald-500 mb-4" />
-                <h3 className="text-xl font-black uppercase tracking-widest text-white">Secure Checkout</h3>
-                <p className="text-sm text-gray-500">Pay with PayPal, Credit, or Debit Card safely.</p>
+                <h3 className="text-xl font-black uppercase tracking-widest text-white">Pago Seguro</h3>
+                <p className="text-sm text-gray-500">Paga con PayPal o Tarjeta de forma segura.</p>
               </div>
 
               <div className="space-y-6 w-full max-w-md mx-auto">
@@ -254,7 +246,7 @@ export default function PremiumPage() {
                           return actions.order.create({
                             intent: "CAPTURE",
                             purchase_units: [{
-                              description: `ViralAuthority PRO PREMIUM - ${billingCycle === "yearly" ? "Yearly" : "Monthly"} Plan`,
+                              description: `ViralAuthority PRO PREMIUM - ${billingCycle === "yearly" ? "Anual" : "Mensual"}`,
                               amount: {
                                 currency_code: "USD",
                                 value: planAmount
@@ -270,22 +262,21 @@ export default function PremiumPage() {
                         }}
                         onError={(err) => {
                           console.error("PAYPAL_SDK_ERROR:", err);
-                          setPaypalError("PayPal no pudo cargar el checkout. Verifica el Client ID y el dominio autorizado.");
+                          setPaypalError("PayPal no pudo cargar el checkout. Verifica tu conexión.");
                         }}
                       />
                     </div>
                   </PayPalScriptProvider>
                 ) : (
                   <div className="p-8 bg-amber-500/10 border border-amber-500/20 rounded-3xl text-center">
-                    <p className="text-xs text-amber-500 font-black uppercase tracking-widest">PayPal Not Configured</p>
-                    <p className="text-[10px] text-gray-500">NEXT_PUBLIC_PAYPAL_CLIENT_ID is missing</p>
+                    <p className="text-xs text-amber-500 font-black uppercase tracking-widest">PayPal No Configurado</p>
+                    <p className="text-[10px] text-gray-500">Falta NEXT_PUBLIC_PAYPAL_CLIENT_ID</p>
                   </div>
                 )}
               </div>
             </motion.div>
           </div>
 
-          {/* Feature Comparison Table */}
           <section className="space-y-12">
             <div className="text-center space-y-4">
               <h2 className="text-4xl font-black uppercase italic tracking-tighter">{t("premium_feature_comparison")}</h2>
@@ -320,13 +311,12 @@ export default function PremiumPage() {
             </div>
           </section>
 
-          {/* Final CTA */}
           <section className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-blue-600/20 border border-white/10 p-16 text-center space-y-8">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent)]" />
-            <h2 className="text-4xl font-black uppercase italic tracking-tighter">Everything you need, in one place.</h2>
-            <p className="text-gray-400 font-medium max-w-2xl mx-auto">Join thousands of creators using ViralAuthority PRO PREMIUM to power their digital workflow with AI.</p>
+            <h2 className="text-4xl font-black uppercase italic tracking-tighter">Todo lo que necesitas en un solo lugar.</h2>
+            <p className="text-gray-400 font-medium max-w-2xl mx-auto">Únete a miles de creadores que usan ViralAuthority PRO PREMIUM.</p>
             <button className="relative px-12 py-5 bg-white text-black rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl shadow-white/10">
-              Get Started Now
+              Comenzar Ahora
             </button>
           </section>
 

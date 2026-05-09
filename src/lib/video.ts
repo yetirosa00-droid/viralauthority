@@ -123,12 +123,29 @@ export async function downloadVideo(
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || "Error descargando");
+      throw new Error(errData.error || "Error al procesar el video");
     }
 
-    const blob = await response.blob();
-    let filename = "viralauthoritypro-download.mp4";
-    const disposition = response.headers.get("Content-Disposition");
+    const data = await response.json();
+    if (!data.success || !data.url) {
+      throw new Error(data.error || "No se pudo obtener el enlace de descarga");
+    }
+
+    // Now fetch the actual file from our new proxy route
+    // The backend returns a URL like /download-file?file=...&name=...
+    // We replace it with our proxy /api/download-file?...
+    const downloadUrl = data.url.replace('/download-file', '/api/download-file');
+    
+    console.log(`[ViralAuthority] Downloading file from: ${downloadUrl}`);
+    
+    const fileResponse = await fetch(downloadUrl);
+    if (!fileResponse.ok) {
+      throw new Error("Error al descargar el archivo final");
+    }
+
+    const blob = await fileResponse.blob();
+    let filename = data.fileName || "viralauthoritypro-download.mp4";
+    const disposition = fileResponse.headers.get("Content-Disposition");
 
     if (disposition) {
       const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
