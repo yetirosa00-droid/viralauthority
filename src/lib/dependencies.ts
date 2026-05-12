@@ -23,13 +23,14 @@ export async function checkDependencies(): Promise<DependencyCheck> {
   try {
     // Check yt-dlp
     const ytDlpPath = process.env.YT_DLP_PATH || 'yt-dlp';
+    const shellOption = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
     try {
-      await execPromise(`"${ytDlpPath}" --version`, { shell: 'cmd.exe' });
+      await execPromise(`"${ytDlpPath}" --version`, { shell: shellOption });
       result.ytDlp = true;
     } catch (e) {
       // Try python -m yt_dlp
       try {
-        await execPromise('python -m yt_dlp --version', { shell: 'cmd.exe' });
+        await execPromise('python -m yt_dlp --version', { shell: shellOption });
         result.pythonYtDlp = true;
       } catch (e2) {}
     }
@@ -37,7 +38,7 @@ export async function checkDependencies(): Promise<DependencyCheck> {
     // Check ffmpeg
     const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
     try {
-      await execPromise(`"${ffmpegPath}" -version`, { shell: 'cmd.exe' });
+      await execPromise(`"${ffmpegPath}" -version`, { shell: shellOption });
       result.ffmpeg = true;
     } catch (e) {}
 
