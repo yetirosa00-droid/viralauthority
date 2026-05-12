@@ -10,7 +10,7 @@ import { WaveFile } from "wavefile";
 import OpenAI from "openai";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 360; // 6 minutes
 
 const execFileAsync = promisify(execFile);
 const winYtDlp = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe" : "yt-dlp";
@@ -222,7 +222,7 @@ export async function POST(request: Request) {
           "-ac", "1",
           "-b:a", "128k",
           tempFilePath,
-        ], { timeout: 120_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
+        ], { timeout: 240_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
 
         try {
           const { stdout } = await execFileAsync(ffprobePath, [
@@ -270,7 +270,7 @@ export async function POST(request: Request) {
           "--ffmpeg-location", ffmpegPath,
           "-o", tempFilePath.replace(".mp3", ""),
           "--no-playlist",
-        ], { timeout: 180_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
+        ], { timeout: 300_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
       } catch {
         throw new Error("Enlace no soportado o caído.");
       }
@@ -326,7 +326,7 @@ export async function POST(request: Request) {
         "-ac", "1",
         "-c:a", "pcm_s16le",
         wavPath,
-      ], { timeout: 120_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
+      ], { timeout: 180_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
 
       const wavBuffer = fs.readFileSync(wavPath);
       const wav = new WaveFile(wavBuffer);

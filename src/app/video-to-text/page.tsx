@@ -101,7 +101,7 @@ import { Footer } from "@/components/Footer";
 
       const response = await axios.post("/api/transcribe", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 180_000 // 3 minutes timeout for long videos
+        timeout: 300_000 // 5 minutes timeout for long videos
       });
 
       clearInterval(progressInterval);
