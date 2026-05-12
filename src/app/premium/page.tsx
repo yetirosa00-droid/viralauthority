@@ -23,7 +23,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   PayPalScriptProvider, 
-  PayPalButtons 
+  PayPalButtons,
+  usePayPalScriptReducer
 } from "@paypal/react-paypal-js";
 
 export default function PremiumPage() {
@@ -40,7 +41,7 @@ export default function PremiumPage() {
   }, []);
 
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim();
-  const planAmount = billingCycle === "yearly" ? "94.99" : "14.99";
+  const planAmount = billingCycle === "yearly" ? "95.00" : "7.99";
 
   const handlePaymentSuccess = async (details: any) => {
     console.log("Payment Successful:", details);
@@ -60,6 +61,68 @@ export default function PremiumPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const PayPalButtonsWrapper = () => {
+    const [{ isPending, isRejected }] = usePayPalScriptReducer();
+
+    useEffect(() => {
+      if (isRejected) {
+        setPaypalError("El SDK de PayPal no pudo cargarse. Verifica que el Client ID en GitHub Secrets sea correcto.");
+      }
+    }, [isRejected]);
+
+    if (isRejected) {
+      return (
+        <div className="mb-6 rounded-2xl border border-red-500/50 bg-red-500/10 p-4 text-xs font-bold text-red-500 shadow-lg">
+          <p className="uppercase tracking-widest mb-1 text-center">Error de Configuración</p>
+          <p className="font-medium opacity-80 text-center">El Client ID proporcionado no es reconocido por PayPal.</p>
+          <p className="mt-4 pt-4 border-t border-red-500/20 text-[10px] opacity-60 leading-relaxed">
+            PROPIETARIO: Por favor, asegúrate de haber copiado el <span className="underline">Client ID</span> (que empieza con A) y no el <span className="underline">Secret</span> en los Secretos de GitHub.
+          </p>
+        </div>
+      );
+    }
+
+    if (isPending) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 space-y-4">
+          <div className="w-8 h-8 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 animate-pulse">Cargando Checkout Seguro...</p>
+        </div>
+      );
+    }
+
+    return (
+      <PayPalButtons 
+        disabled={loading}
+        forceReRender={[billingCycle, planAmount]}
+        style={{ layout: "vertical", shape: "rect", label: "pay" }}
+        createOrder={(data, actions) => {
+          setPaypalError(null);
+          return actions.order.create({
+            intent: "CAPTURE",
+            purchase_units: [{
+              description: `ViralAuthority PRO PREMIUM - ${billingCycle === "yearly" ? "Anual" : "Mensual"}`,
+              amount: {
+                currency_code: "USD",
+                value: planAmount
+              }
+            }]
+          });
+        }}
+        onApprove={async (data, actions) => {
+          if (actions.order) {
+            const details = await actions.order.capture();
+            handlePaymentSuccess(details);
+          }
+        }}
+        onError={(err) => {
+          console.error("PAYPAL_SDK_ERROR:", err);
+          setPaypalError("Error en la transacción o el SDK es inválido.");
+        }}
+      />
+    );
   };
 
   const benefits = [
@@ -232,39 +295,7 @@ export default function PremiumPage() {
                     intent: "capture"
                   }}>
                     <div className="p-4 bg-white rounded-2xl shadow-inner">
-                      {paypalError && (
-                        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-600">
-                          {paypalError}
-                        </div>
-                      )}
-                      <PayPalButtons 
-                        disabled={loading}
-                        forceReRender={[billingCycle, planAmount]}
-                        style={{ layout: "vertical", shape: "rect", label: "pay" }}
-                        createOrder={(data, actions) => {
-                          setPaypalError(null);
-                          return actions.order.create({
-                            intent: "CAPTURE",
-                            purchase_units: [{
-                              description: `ViralAuthority PRO PREMIUM - ${billingCycle === "yearly" ? "Anual" : "Mensual"}`,
-                              amount: {
-                                currency_code: "USD",
-                                value: planAmount
-                              }
-                            }]
-                          });
-                        }}
-                        onApprove={async (data, actions) => {
-                          if (actions.order) {
-                            const details = await actions.order.capture();
-                            handlePaymentSuccess(details);
-                          }
-                        }}
-                        onError={(err) => {
-                          console.error("PAYPAL_SDK_ERROR:", err);
-                          setPaypalError("PayPal no pudo cargar el checkout. Verifica tu conexión.");
-                        }}
-                      />
+                      <PayPalButtonsWrapper />
                     </div>
                   </PayPalScriptProvider>
                 ) : (
