@@ -19,6 +19,8 @@ const winFfmpeg = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/M
 env.allowLocalModels = false;
 env.useBrowserCache = false;
 
+const COOKIES_PATH = process.env.COOKIES_PATH || path.join(process.cwd(), "backend", "cookies.txt");
+
 type Segment = { start: number; end: number; text: string };
 type WhisperChunk = { text?: string; timestamp?: [number, number] | number[] };
 type WhisperOutput = { text?: string; chunks?: WhisperChunk[] };
@@ -64,9 +66,15 @@ function getErrorMessage(error: unknown) {
 }
 
 async function getRemoteDuration(url: string, ytDlpPath: string) {
+  const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings"];
+  
+  if (fs.existsSync(COOKIES_PATH)) {
+    args.push("--cookies", COOKIES_PATH);
+  }
+
   const { stdout } = await execFileAsync(
     ytDlpPath,
-    [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings"],
+    args,
     { timeout: 45_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true },
   );
 
@@ -259,8 +267,7 @@ export async function POST(request: Request) {
         if (message.includes("Upgrade") || message.includes("Premium")) throw e;
       }
 
-      try {
-        await execFileAsync(ytDlpPath, [
+        const args = [
           url,
           "-f", "bestaudio/best",
           "-x",
@@ -270,9 +277,26 @@ export async function POST(request: Request) {
           "--ffmpeg-location", ffmpegPath,
           "-o", tempFilePath.replace(".mp3", ""),
           "--no-playlist",
-        ], { timeout: 300_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
-      } catch {
-        throw new Error("Enlace no soportado o caído.");
+          "--no-warnings",
+        ];
+
+        if (fs.existsSync(COOKIES_PATH)) {
+          console.log("[ViralAuthority PRO PREMIUM AI] Using cookies for download...");
+          args.push("--cookies", COOKIES_PATH);
+        }
+
+        await execFileAsync(ytDlpPath, args, { 
+          timeout: 300_000, 
+          maxBuffer: 1024 * 1024 * 8, 
+          windowsHide: true 
+        });
+      } catch (e: any) {
+        console.error("[ViralAuthority PRO PREMIUM AI] YT-DLP Error:", e.message);
+        const errorMsg = e.message || "";
+        if (errorMsg.includes("Sign in to confirm you’re not a bot")) {
+          throw new Error("YouTube bloqueó la descarga. Intenta de nuevo en unos minutos o contacta a soporte.");
+        }
+        throw new Error("Enlace no soportado, privado o caído. Verifica la URL.");
       }
     }
 
