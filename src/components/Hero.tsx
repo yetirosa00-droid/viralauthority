@@ -51,7 +51,7 @@ export function Hero({ onSearch, isLoading, externalUrl }: HeroProps) {
               ViralAuthority PRO PREMIUM v1.0
             </div>
 
-            <h1 className="text-5xl font-black tracking-tighter text-white sm:text-7xl lg:text-8xl leading-tight mb-8">
+            <h1 className="text-4xl font-black tracking-tighter text-white sm:text-6xl lg:text-7xl leading-tight mb-8 uppercase italic">
               {t("hero_title_1")}{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-gradient-x">
                 {t("hero_title_2")}
