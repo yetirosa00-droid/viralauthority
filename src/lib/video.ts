@@ -54,7 +54,8 @@ export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
       };
     }
 
-    const endpoint = "/api/video/info";
+    const apiUrl = getApiUrl();
+    const endpoint = `${apiUrl}/api/video/info`;
     console.info(`[ViralAuthority PRO PREMIUM] Fetching metadata from ${endpoint} for ${platformId}...`);
 
     const response = await axios.post(
@@ -135,7 +136,8 @@ export async function downloadVideo(
       title: title || "",
     };
 
-    const response = await fetch("/api/download", {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/download`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -156,7 +158,7 @@ export async function downloadVideo(
     // Now fetch the actual file from our new proxy route
     // The backend returns a URL like /download-file?file=...&name=...
     // We replace it with our proxy /api/download-file?...
-    const downloadUrl = data.url.replace('/download-file', '/api/download-file');
+    const downloadUrl = `${apiUrl}${data.url.replace('/download-file', '/api/download-file')}`;
     
     console.log(`[ViralAuthority] Downloading file from: ${downloadUrl}`);
     
