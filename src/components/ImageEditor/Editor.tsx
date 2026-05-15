@@ -10,6 +10,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { Loader2, X, CheckCircle2, AlertCircle, Undo2, Redo2 } from "lucide-react";
 import { removeImageBackground, upscaleImage } from "@/lib/ai";
 import { getVideoInfo } from "@/lib/video";
+import { detectPlatform } from "@/lib/platforms";
 
 interface EditorProps {
   imageSrc?: string;
@@ -62,7 +63,8 @@ export default function Editor({ imageSrc, onClose }: EditorProps) {
       const info = await getVideoInfo(url);
       if (info.formats && info.formats.length > 0) {
         const directUrl = info.formats[0].url;
-        if (url.includes("instagram") || url.includes("tiktok") || url.includes("youtube")) {
+        const platform = detectPlatform(url);
+        if (platform !== "unknown") {
           setVideo(directUrl);
         } else {
           setImage(directUrl);

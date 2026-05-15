@@ -8,13 +8,31 @@ import path from "path";
 import os from "os";
 import { WaveFile } from "wavefile";
 import OpenAI from "openai";
+import { detectPlatform } from "@/lib/platforms";
 
 export const runtime = "nodejs";
 export const maxDuration = 360; // 6 minutes
 
 const execFileAsync = promisify(execFile);
-const winYtDlp = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/Microsoft/WinGet/Links/yt-dlp.exe" : "yt-dlp";
-const winFfmpeg = process.platform === 'win32' ? "C:/Users/georg/AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-123778-g3b55818764-win64-gpl/bin/ffmpeg.exe" : "ffmpeg";
+
+// Discover binaries robustly
+function discoverBinary(name: string, fallback: string) {
+  // Try environment variable first
+  if (process.env[`${name.toUpperCase()}_PATH`]) {
+    return process.env[`${name.toUpperCase()}_PATH`] as string;
+  }
+  
+  // Try to use 'which' or 'where' to find it in PATH
+  try {
+    const cmd = process.platform === 'win32' ? 'where' : 'which';
+    // This is synchronous for discovery at module level if needed, but we'll do it in a helper
+  } catch (e) {}
+
+  return fallback;
+}
+
+const winYtDlp = "yt-dlp";
+const winFfmpeg = "ffmpeg";
 
 env.allowLocalModels = false;
 env.useBrowserCache = false;
@@ -207,6 +225,15 @@ export async function POST(request: Request) {
     const { ytDlpPath, ffmpegPath, ffprobePath } = getBinaryPaths();
     const tempDir = getTempDir();
 
+    // Validate URL if provided
+    if (url) {
+      const platform = detectPlatform(url);
+      if (platform === 'unknown') {
+        return NextResponse.json({ error: "Este enlace todavía no está soportado para transcripción. Verifica la URL." }, { status: 400 });
+      }
+      console.log(`[ViralAuthority PRO PREMIUM AI] Platform Detected: ${platform}`);
+    }
+
     // Extract to MP3 to ensure compatibility with OpenAI's 25MB limit (WAV is too large)
     tempFilePath = path.join(tempDir, `vyt_audio_${Date.now()}.mp3`);
     tempFilesToCleanup.push(tempFilePath);
@@ -267,6 +294,7 @@ export async function POST(request: Request) {
         if (message.includes("Upgrade") || message.includes("Premium")) throw e;
       }
 
+      try {
         const args = [
           url,
           "-f", "bestaudio/best",
@@ -294,11 +322,15 @@ export async function POST(request: Request) {
         console.error("[ViralAuthority PRO PREMIUM AI] YT-DLP Error:", e.message);
         const errorMsg = e.message || "";
         if (errorMsg.includes("Sign in to confirm you’re not a bot")) {
-          throw new Error("YouTube bloqueó la descarga. Intenta de nuevo en unos minutos o contacta a soporte.");
+          throw new Error("YouTube bloqueó temporalmente la solicitud. Intenta de nuevo en unos minutos.");
         }
-        throw new Error("Enlace no soportado, privado o caído. Verifica la URL.");
+        if (errorMsg.includes("Private video") || errorMsg.includes("video is private")) {
+          throw new Error("El video es privado y no puede ser procesado.");
+        }
+        throw new Error("Error al procesar el video. Verifica que el enlace sea público y válido.");
       }
     }
+
 
     if (!fs.existsSync(tempFilePath)) {
       throw new Error("Error crítico: No se generó el flujo de audio para la IA.");

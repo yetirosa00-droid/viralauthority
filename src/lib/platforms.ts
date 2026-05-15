@@ -10,125 +10,114 @@ export type SupportedPlatform =
   | "twitter-x"
   | "reddit"
   | "twitch"
-  | "soundcloud";
+  | "soundcloud"
+  | "unknown";
 
-type PlatformDefinition = {
+interface PlatformMatch {
   id: SupportedPlatform;
   label: string;
   route: string;
-  hosts: string[];
-};
+  regex: RegExp;
+}
 
-export const SUPPORTED_PLATFORMS: PlatformDefinition[] = [
+export const SUPPORTED_PLATFORMS: PlatformMatch[] = [
   {
     id: "youtube",
     label: "YouTube",
     route: "/download-youtube-video",
-    hosts: ["youtube.com", "m.youtube.com", "www.youtube.com", "youtu.be"],
+    regex: /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=|shorts\/|embed\/|v\/|.+?v=)?([^"&?\/\s]{11})/i,
   },
   {
     id: "tiktok",
     label: "TikTok",
     route: "/download-tiktok-video",
-    hosts: ["tiktok.com", "www.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"],
+    regex: /(?:https?:\/\/)?(?:www\.|vm\.|vt\.)?tiktok\.com\/.*?(?:video\/(\d+)|(@[\w.-]+\/video\/\d+)|(\w+))/i,
   },
   {
     id: "instagram",
     label: "Instagram",
     route: "/download-instagram-video",
-    hosts: ["instagram.com", "www.instagram.com", "threads.net", "www.threads.net"],
+    regex: /(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?:p|reel|tv|stories)\/([\w-]+)/i,
   },
   {
     id: "facebook",
     label: "Facebook",
     route: "/download-facebook-video",
-    hosts: ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.watch"],
+    regex: /(?:https?:\/\/)?(?:www\.|m\.|web\.|fb\.)?(?:facebook\.com|fb\.watch)\/(?:watch\/\?v=|video\.php\?v=|story\.php\?story_fbid=|reel\/|.*\/videos\/|.*\/posts\/|groups\/.*?\/permalink\/|)([^"&?\/\s]+)/i,
   },
   {
     id: "pinterest",
     label: "Pinterest",
     route: "/download-pinterest-video",
-    hosts: ["pinterest.com", "www.pinterest.com", "pin.it"],
+    regex: /(?:https?:\/\/)?(?:[\w-]+\.)?pinterest\.com\/(?:pin\/(\d+)|([\w-]+))|(?:https?:\/\/)?pin\.it\/([\w-]+)/i,
   },
   {
     id: "twitter-x",
     label: "Twitter/X",
     route: "/download-twitter-video",
-    hosts: ["twitter.com", "www.twitter.com", "mobile.twitter.com", "x.com", "www.x.com"],
+    regex: /(?:https?:\/\/)?(?:www\.|mobile\.)?(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/i,
   },
   {
     id: "reddit",
     label: "Reddit",
     route: "/download-reddit-video",
-    hosts: ["reddit.com", "www.reddit.com", "old.reddit.com", "v.redd.it", "redd.it"],
+    regex: /(?:https?:\/\/)?(?:www\.|old\.|v\.|)reddit\.com\/(?:r\/\w+\/comments\/|v\/|)([\w-]+)/i,
   },
   {
     id: "twitch",
     label: "Twitch",
-    route: "/download-twitch-clip",
-    hosts: ["twitch.tv", "www.twitch.tv", "clips.twitch.tv"],
+    route: "/download-twitch-video",
+    regex: /(?:https?:\/\/)?(?:www\.|m\.|clips\.)?(?:twitch\.tv)\/(?:videos\/|[\w-]+\/v\/|[\w-]+\/clip\/|)?([\w-]+)/i,
   },
   {
     id: "soundcloud",
     label: "SoundCloud",
     route: "/download-soundcloud-audio",
-    hosts: ["soundcloud.com", "www.soundcloud.com", "on.soundcloud.com"],
+    regex: /(?:https?:\/\/)?(?:www\.|m\.)?soundcloud\.com\/([\w-]+\/[\w-]+)/i,
   },
 ];
 
-function normalizeHost(hostname: string) {
-  return hostname.toLowerCase().replace(/\.$/, "");
-}
+/**
+ * Robustly detects the platform from a given URL.
+ */
+export function detectPlatform(url: string): SupportedPlatform {
+  const cleanUrl = url.trim();
+  if (!cleanUrl) return "unknown";
 
-function hostMatches(hostname: string, supportedHost: string) {
-  const host = normalizeHost(hostname);
-  const target = normalizeHost(supportedHost);
-  return host === target || host.endsWith(`.${target}`);
-}
-
-export function detectSupportedPlatform(rawUrl: string) {
-  try {
-    let urlToParse = rawUrl.trim();
-    if (!/^https?:\/\//i.test(urlToParse)) {
-      urlToParse = `https://${urlToParse}`;
+  for (const platform of SUPPORTED_PLATFORMS) {
+    if (platform.regex.test(cleanUrl)) {
+      return platform.id;
     }
-    const parsed = new URL(urlToParse);
-    const protocol = parsed.protocol.toLowerCase();
-
-    if (protocol !== "http:" && protocol !== "https:") {
-      return {
-        platform: null,
-        route: null,
-        label: null,
-        reason: `unsupported protocol: ${protocol || "empty"}`,
-      };
-    }
-
-    const matched = SUPPORTED_PLATFORMS.find((platform) =>
-      platform.hosts.some((host) => hostMatches(parsed.hostname, host))
-    );
-
-    if (!matched) {
-      return {
-        platform: null,
-        route: null,
-        label: null,
-        reason: `unsupported host: ${parsed.hostname || "empty"}`,
-      };
-    }
-
-    return {
-      platform: matched.id,
-      route: matched.route,
-      label: matched.label,
-      reason: "matched supported host",
-    };
-  } catch {
-    return {
-      platform: null,
-      route: null,
-      label: null,
-      reason: "invalid URL",
-    };
   }
+
+  return "unknown";
 }
+
+/**
+ * Comprehensive detection for both platform ID and route.
+ */
+export function detectSupportedPlatform(rawUrl: string) {
+  const url = rawUrl.trim();
+  if (!url) {
+    return { platform: null, route: null, label: null, reason: "empty URL" };
+  }
+
+  for (const platform of SUPPORTED_PLATFORMS) {
+    if (platform.regex.test(url)) {
+      return {
+        platform: platform.id,
+        route: platform.route,
+        label: platform.label,
+        reason: "regex match",
+      };
+    }
+  }
+
+  return {
+    platform: null,
+    route: null,
+    label: null,
+    reason: "no regex match",
+  };
+}
+

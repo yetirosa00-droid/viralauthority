@@ -61,9 +61,21 @@ const COOKIES_PATH = process.env.COOKIES_PATH || path.join(__dirname, 'cookies.t
 console.log(`🔍 [ViralAuthority Engine] YT-DLP: ${YT_DLP_BIN}`);
 console.log(`🔍 [ViralAuthority Engine] FFmpeg: ${FFMPEG_BIN}`);
 
+// Startup diagnostic
+(async () => {
+  try {
+    const { stdout: ytdlpVer } = await execPromise(`"${YT_DLP_BIN}" --version`);
+    console.log(`✅ [ViralAuthority Engine] YT-DLP version: ${ytdlpVer.trim()}`);
+    const { stdout: ffmpegVer } = await execPromise(`"${FFMPEG_BIN}" -version`);
+    console.log(`✅ [ViralAuthority Engine] FFmpeg detected: ${ffmpegVer.split('\n')[0]}`);
+  } catch (err) {
+    console.warn(`⚠️ [ViralAuthority Engine] Startup Diagnostic Warning: Some binaries might not be fully accessible.`, err.message);
+  }
+})();
+
 let cookiesActive = false;
 if (fs.existsSync(COOKIES_PATH)) {
-  console.log(`🍪 [ViralAuthority Engine] Cookies detected!`);
+  console.log(`🍪 [ViralAuthority Engine] Cookies detected at ${COOKIES_PATH}!`);
   cookiesActive = true;
 }
 
@@ -103,7 +115,13 @@ const PLATFORM_MAP = {
   instagram: "Instagram",
   facebook: "Facebook",
   pinterest: "Pinterest",
+  twitter: "Twitter/X",
+  "twitter-x": "Twitter/X",
+  reddit: "Reddit",
+  twitch: "Twitch",
+  soundcloud: "SoundCloud",
 };
+
 
 // --- Helper Functions ---
 function prioritizeFormats(formats) {
@@ -302,28 +320,37 @@ app.post('/info', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL is required" });
 
-  console.log(`🔍 [ViralAuthority PRO PREMIUM Engine] Fetching info for: ${url}`);
+  const cleanUrl = url.trim();
+  console.log(`\n--- [ViralAuthority PRO PREMIUM] NEW INFO REQUEST ---`);
+  console.log(`🔗 URL: ${cleanUrl}`);
+
   try {
-    const data = await ytDlpWrapper(url, getYtDlpArgs({
+    const args = getYtDlpArgs({
       dumpSingleJson: true,
       noPlaylist: true,
       skipDownload: true,
-    }));
+    });
     
-    console.log(`✅ [ViralAuthority PRO PREMIUM Engine] Info fetched for: ${data.title}`);
+    console.log(`🛠️ Executing yt-dlp metadata fetch...`);
+    const data = await ytDlpWrapper(cleanUrl, args);
+    
+    const platform = PLATFORM_MAP[data.extractor_key.toLowerCase()] || data.extractor_key;
+    console.log(`✅ Title: ${data.title}`);
+    console.log(`✅ Platform detected by engine: ${platform}`);
 
     const info = {
       title: data.title,
       thumbnail: data.thumbnail,
       duration: data.duration,
-      url: url,
-      platform: PLATFORM_MAP[data.extractor_key.toLowerCase()] || data.extractor_key,
+      url: cleanUrl,
+      platform: platform,
       formats: prioritizeFormats(data.formats || [])
     };
 
     res.json(info);
   } catch (error) {
-    console.error("Info Fetching Error:", error);
+    console.error("❌ Info Fetching Error:", error.message);
+    if (error.stderr) console.error("❌ Stderr:", error.stderr);
     
     // Specifically handle common yt-dlp/video errors
     const errorMessage = error.stderr || error.message || "";
@@ -331,13 +358,16 @@ app.post('/info', async (req, res) => {
       return res.status(404).json({ error: "El video no está disponible o el enlace está roto." });
     }
     if (errorMessage.includes("Private video") || errorMessage.includes("Sign in if you've been granted access") || errorMessage.includes("private post")) {
-      return res.status(403).json({ error: "Este video es privado o restringido." });
+      return res.status(403).json({ error: "Este video es privado o restringido. Podría requerir cookies de sesión actualizadas." });
     }
     if (errorMessage.includes("Your IP address is blocked") || errorMessage.includes("TikTok")) {
-       return res.status(403).json({ error: "TikTok está bloqueando temporalmente las descargas desde este servidor. Por favor, intenta usar otra plataforma." });
+       return res.status(403).json({ error: "TikTok está bloqueando temporalmente las solicitudes. Intenta en unos minutos." });
     }
 
-    res.status(400).json({ error: "No se pudo procesar la información del video. Verifica el enlace e inténtalo de nuevo." });
+    res.status(400).json({ 
+      error: "No se pudo procesar la información del video.",
+      details: errorMessage.slice(0, 100) 
+    });
   }
 });
 

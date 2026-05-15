@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Hero } from "@/components/Hero";
@@ -40,13 +40,30 @@ const ALL_PLATFORMS = [
   { name: "Audio", path: "/audio" },
 ];
 
-export function SEOPage({ platform, title, subtitle, content, faqData }: SEOPageProps) {
+export function SEOPage(props: SEOPageProps) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <SEOPageContent {...props} />
+    </Suspense>
+  );
+}
+
+function SEOPageContent({ platform, title, subtitle, content, faqData }: SEOPageProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isPremium } = useUser();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
+
+  // Auto-process if URL is in query params
+  React.useEffect(() => {
+    const urlParam = searchParams.get("url");
+    if (urlParam && !videoInfo && !loading && !error) {
+      handleSearch(urlParam);
+    }
+  }, [searchParams]);
 
   const handleSearch = async (url: string) => {
     setVideoUrl(url);
@@ -63,15 +80,10 @@ export function SEOPage({ platform, title, subtitle, content, faqData }: SEOPage
         return;
       }
 
-      if (info && info.title) {
-        setVideoInfo(info);
-        setLoading(false);
-      } else {
-        setError("No se pudo analizar el enlace. Verifica la URL.");
-        setLoading(false);
-      }
+      setVideoInfo(info);
+      setLoading(false);
     } catch (err: any) {
-      const msg = err.message || "No se pudo analizar el enlace. Verifica la URL.";
+      const msg = err.response?.data?.error || "Error al obtener información del video";
       setError(msg);
       setLoading(false);
     }
@@ -103,20 +115,22 @@ export function SEOPage({ platform, title, subtitle, content, faqData }: SEOPage
       )}
       
       <main className="flex-1">
-        {!videoInfo && !loading && <Hero onSearch={handleSearch} isLoading={loading} />}
+        {!videoInfo && !loading && <Hero onSearch={handleSearch} isLoading={loading} externalUrl={videoUrl} />}
         {!videoInfo && !loading && <ResponsibleUseNotice />}
-        
-        {loading && <LoadingState />}
-        
-        {error && <ErrorAlert message={error} onClear={() => setError(null)} />}
-        
         {videoInfo && !loading && (
           <ResultCard 
             info={videoInfo} 
             videoUrl={videoUrl}
-            onReset={() => setVideoInfo(null)} 
+            onReset={() => {
+              setVideoInfo(null);
+              setVideoUrl("");
+            }} 
           />
         )}
+        
+        {loading && <LoadingState />}
+        
+        {error && <ErrorAlert message={error} onClear={() => setError(null)} />}
 
         {!isPremium && (
           <>

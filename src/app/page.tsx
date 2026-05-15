@@ -162,25 +162,33 @@ export default function Home() {
   };
 
   const handleSearch = async (url: string) => {
-    setVideoUrl(url);
-    const detection = detectSupportedPlatform(url);
+    const cleanUrl = url.trim();
+    if (!cleanUrl) return;
+    
+    setVideoUrl(cleanUrl);
+    const detection = detectSupportedPlatform(cleanUrl);
 
-    console.info("[ViralAuthority Platform Detector]", {
-      url,
+    console.info("[ViralAuthority PRO PREMIUM] Platform Detector", {
+      url: cleanUrl,
       platform: detection.platform,
       reason: detection.reason,
+      route: detection.route
     });
 
-    if (!detection.route) {
+    if (!detection.route || !detection.platform) {
+      console.warn("[ViralAuthority PRO PREMIUM] No route found for URL:", cleanUrl);
       setError(UNSUPPORTED_LINK_ERROR);
       return;
     }
 
     setError(null);
     setVideoInfo(null);
-    setLoading(false);
-    router.push(detection.route);
+    setLoading(true);
+    
+    // Redirect to the dedicated platform page
+    router.push(detection.route + "?url=" + encodeURIComponent(cleanUrl));
   };
+
 
   const reset = () => {
     setVideoInfo(null);

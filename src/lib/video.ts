@@ -31,19 +31,23 @@ export interface VideoInfo {
 }
 
 export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
+  const url = videoUrl.trim();
   try {
-    const detection = detectSupportedPlatform(videoUrl);
-    console.info("[ViralAuthority Video Helper] URL received", {
-      url: videoUrl,
-      platform: detection.platform,
+    const platformId = detectPlatform(url);
+    const detection = detectSupportedPlatform(url);
+
+    console.info(`[ViralAuthority PRO PREMIUM] Detect Platform: ${platformId}`, {
+      url: url,
       reason: detection.reason,
+      route: detection.route
     });
 
-    if (!detection.platform) {
+    if (platformId === "unknown") {
+      console.warn(`[ViralAuthority PRO PREMIUM] Unsupported Platform for URL: ${url}`);
       return {
         title: "",
         thumbnail: "",
-        url: videoUrl,
+        url: url,
         platform: "",
         formats: [],
         error: UNSUPPORTED_LINK_ERROR,
@@ -51,40 +55,58 @@ export async function getVideoInfo(videoUrl: string): Promise<VideoInfo> {
     }
 
     const endpoint = "/api/video/info";
-    console.log(`[ViralAuthority] Fetching from: ${endpoint}`);
+    console.info(`[ViralAuthority PRO PREMIUM] Fetching metadata from ${endpoint} for ${platformId}...`);
 
     const response = await axios.post(
       endpoint,
-      { url: videoUrl },
+      { url: url },
       { 
-        timeout: 30_000,
+        timeout: 45_000, // Increased timeout for heavy videos
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         }
       }
     );
+
+    if (response.data && response.data.error) {
+      return {
+        ...response.data,
+        title: response.data.title || "",
+        thumbnail: response.data.thumbnail || "",
+        url: url,
+        formats: response.data.formats || [],
+      };
+    }
+
     return response.data;
   } catch (error: unknown) {
-    console.warn("Video info request failed:", error);
+    console.error("[ViralAuthority PRO PREMIUM] Video metadata fetch error:", error);
     
-    let errorMessage = VIDEO_INFO_ERROR;
+    let errorMessage = "No se pudo procesar este enlace ahora. Intenta nuevamente o usa otro video.";
+    
     if (axios.isAxiosError(error)) {
-      if (error.code === 'ECONNABORTED') errorMessage = "El servidor tardó demasiado en responder.";
-      else if (!error.response) errorMessage = "Error de red. Verifica tu conexión o el estado del servidor.";
-      else errorMessage = (error.response?.data as { error?: string } | undefined)?.error || errorMessage;
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = "El servidor tardó demasiado en responder. El video podría ser muy largo o estar restringido.";
+      } else if (!error.response) {
+        errorMessage = "Error de red. Verifica tu conexión o el estado del servidor de ViralAuthority.";
+      } else {
+        const serverError = (error.response?.data as { error?: string } | undefined)?.error;
+        errorMessage = serverError || errorMessage;
+      }
     }
 
     return {
       title: "",
       thumbnail: "",
-      url: videoUrl,
+      url: url,
       platform: "",
       formats: [],
       error: errorMessage,
     };
   }
 }
+
 
 export async function downloadVideo(
   videoUrl: string,
