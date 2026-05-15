@@ -1,5 +1,5 @@
 import axios from "axios";
-import { detectSupportedPlatform, UNSUPPORTED_LINK_ERROR } from "@/lib/platforms";
+import { detectPlatform, detectSupportedPlatform, UNSUPPORTED_LINK_ERROR } from "@/lib/platforms";
 
 const getApiUrl = () => {
   if (typeof window !== "undefined") {
