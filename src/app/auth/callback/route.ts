@@ -2,12 +2,12 @@ import { createClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/dashboard';
   
-  // Use NEXT_PUBLIC_APP_URL if available to avoid localhost redirect issues behind a proxy
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
+  // Hardcode the production URL to bypass any proxy origin issues
+  const appUrl = 'https://viralauthoritypro.com';
 
   if (code) {
     const supabase = createClient();
