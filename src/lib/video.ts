@@ -2,10 +2,13 @@ import axios from "axios";
 import { detectPlatform, detectSupportedPlatform, UNSUPPORTED_LINK_ERROR } from "@/lib/platforms";
 
 const getApiUrl = () => {
+  // Always use the current origin in the browser to avoid SSL mismatches on api subdomain.
+  // Next.js /api/* routes proxy internally to the backend engine on port 3001.
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+    return window.location.origin;
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  // Server-side: use BACKEND_URL directly to avoid network round-trips
+  return process.env.BACKEND_URL || "http://localhost:3001";
 };
 
 const VIDEO_INFO_ENDPOINT = "/api/video/info";
