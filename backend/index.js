@@ -323,6 +323,8 @@ app.post('/info', async (req, res) => {
   const cleanUrl = url.trim();
   console.log(`\n--- [ViralAuthority PRO PREMIUM] NEW INFO REQUEST ---`);
   console.log(`🔗 URL: ${cleanUrl}`);
+  console.log(`🛠️ YT-DLP BIN: ${YT_DLP_BIN}`);
+  console.log(`🛠️ FFmpeg BIN: ${FFMPEG_BIN}`);
 
   try {
     const args = getYtDlpArgs({
@@ -334,7 +336,7 @@ app.post('/info', async (req, res) => {
     console.log(`🛠️ Executing yt-dlp metadata fetch...`);
     const data = await ytDlpWrapper(cleanUrl, args);
     
-    const platform = PLATFORM_MAP[data.extractor_key.toLowerCase()] || data.extractor_key;
+    const platform = PLATFORM_MAP[data.extractor_key?.toLowerCase()] || data.extractor_key || "unknown";
     console.log(`✅ Title: ${data.title}`);
     console.log(`✅ Platform detected by engine: ${platform}`);
 
@@ -379,6 +381,12 @@ app.post('/download', async (req, res) => {
   const { url, formatId, qualityLabel } = req.body;
   if (!url || !formatId) return res.status(400).json({ error: "URL and formatId are required" });
 
+  console.log(`🚀 [ViralAuthority PRO PREMIUM Engine] NEW DOWNLOAD REQUEST ---`);
+  console.log(`🔗 URL: ${url}`);
+  console.log(`📦 FormatID: ${formatId}`);
+  console.log(`🛠️ YT-DLP BIN: ${YT_DLP_BIN}`);
+  console.log(`🛠️ FFmpeg BIN: ${FFMPEG_BIN}`);
+
   // Cleanup old files (> 1 hour)
   try {
     const now = Date.now();
@@ -394,14 +402,16 @@ app.post('/download', async (req, res) => {
     console.error("Cleanup error:", err);
   }
 
-  console.log(`🚀 [ViralAuthority PRO PREMIUM Engine] Starting download: ${url} (Format: ${formatId})`);
-
   try {
     const isAudio = formatId.startsWith('audio_');
     const timestamp = Date.now();
+    
+    console.log(`🛠️ Fetching title for download naming...`);
     const info = await execPromise(`"${YT_DLP_BIN}" --print "%(title)s" "${url}"`);
     const rawTitle = info.stdout.trim() || "video";
     const safeTitle = sanitizeFileName(rawTitle);
+    
+    console.log(`✅ Safe Title: ${safeTitle}`);
     
     let bitrate = "128";
     if (formatId === "audio_192") bitrate = "192";
