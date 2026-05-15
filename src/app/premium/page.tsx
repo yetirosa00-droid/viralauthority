@@ -68,17 +68,18 @@ export default function PremiumPage() {
 
     useEffect(() => {
       if (isRejected) {
-        setPaypalError("El SDK de PayPal no pudo cargarse. Verifica que el Client ID en GitHub Secrets sea correcto.");
+        console.error("PAYPAL_SDK_LOAD_ERROR: The Client ID might be invalid or restricted.");
       }
     }, [isRejected]);
 
     if (isRejected) {
       return (
-        <div className="mb-6 rounded-2xl border border-red-500/50 bg-red-500/10 p-4 text-xs font-bold text-red-500 shadow-lg">
-          <p className="uppercase tracking-widest mb-1 text-center">Error de Configuración</p>
-          <p className="font-medium opacity-80 text-center">El Client ID proporcionado no es reconocido por PayPal.</p>
-          <p className="mt-4 pt-4 border-t border-red-500/20 text-[10px] opacity-60 leading-relaxed">
-            PROPIETARIO: Por favor, asegúrate de haber copiado el <span className="underline">Client ID</span> (que empieza con A) y no el <span className="underline">Secret</span> en los Secretos de GitHub.
+        <div className="mb-6 rounded-2xl border border-amber-500/50 bg-amber-500/10 p-6 text-center shadow-lg">
+          <ShieldAlert size={32} className="mx-auto text-amber-500 mb-3" />
+          <p className="text-sm font-bold text-amber-500 uppercase tracking-widest mb-2">Servicio no disponible</p>
+          <p className="text-xs text-gray-400 font-medium leading-relaxed">
+            El sistema de pagos no está disponible temporalmente. <br />
+            Por favor, intenta más tarde o contacta con soporte.
           </p>
         </div>
       );
@@ -300,8 +301,9 @@ export default function PremiumPage() {
                   </PayPalScriptProvider>
                 ) : (
                   <div className="p-8 bg-amber-500/10 border border-amber-500/20 rounded-3xl text-center">
-                    <p className="text-xs text-amber-500 font-black uppercase tracking-widest">PayPal No Configurado</p>
-                    <p className="text-[10px] text-gray-500">Falta NEXT_PUBLIC_PAYPAL_CLIENT_ID</p>
+                    <ShieldAlert size={24} className="mx-auto text-amber-500 mb-2" />
+                    <p className="text-xs text-amber-500 font-black uppercase tracking-widest">Servicio no disponible</p>
+                    <p className="text-[10px] text-gray-500">Estamos actualizando nuestra pasarela de pagos.</p>
                   </div>
                 )}
               </div>
