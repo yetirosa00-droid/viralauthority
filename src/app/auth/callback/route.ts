@@ -4,17 +4,18 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  // if "next" is in search params, use it as the redirection URL
   const next = searchParams.get('next') ?? '/dashboard';
+  
+  // Use NEXT_PUBLIC_APP_URL if available to avoid localhost redirect issues behind a proxy
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
 
   if (code) {
     const supabase = createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${appUrl}${next}`);
     }
   }
 
-  // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/?error=auth_failed`);
+  return NextResponse.redirect(`${appUrl}/?error=auth_failed`);
 }
