@@ -121,8 +121,12 @@ import { Footer } from "@/components/Footer";
     } catch (err: any) {
       clearInterval(progressInterval);
       console.error("Transcription error:", err);
-      const serverError = err.response?.data?.error || "Error de red";
+      let serverError = err.response?.data?.error || "Error de red";
       const details = err.response?.data?.details;
+      
+      if (serverError === "YOUTUBE_RATE_LIMITED" || (err.response?.data?.message && err.response.data.message.includes("YouTube bloqueó"))) {
+        serverError = "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video.";
+      }
       
       setError(details ? `${serverError}: ${details.substring(0, 100)}` : serverError);
       setStatusMessage("Fallo en el procesamiento");
