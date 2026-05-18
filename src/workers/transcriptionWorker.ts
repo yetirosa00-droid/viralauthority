@@ -80,6 +80,7 @@ async function downloadAudioWithFallback(
 ): Promise<void> {
   const cleanUrl = url.trim();
   const cookiesEnabled = fs.existsSync(COOKIES_PATH);
+  const proxyUrl = process.env.YTDLP_PROXY_URL || process.env.PROXY_URL;
   
   const baseArgs = [
     cleanUrl,
@@ -105,6 +106,10 @@ async function downloadAudioWithFallback(
 
   if (cookiesEnabled) {
     baseArgs.push('--cookies', COOKIES_PATH);
+  }
+
+  if (proxyUrl) {
+    baseArgs.push('--proxy', proxyUrl);
   }
 
   // Attempt 1: bestaudio
@@ -313,6 +318,7 @@ async function processJob(job: Job) {
       // Fetch duration first
       try {
         const cookiesEnabled = fs.existsSync(COOKIES_PATH);
+        const proxyUrl = process.env.YTDLP_PROXY_URL || process.env.PROXY_URL;
         const args = [
           job.url,
           '--dump-single-json',
@@ -328,6 +334,7 @@ async function processJob(job: Job) {
           '--js-runtimes', 'node'
         ];
         if (cookiesEnabled) args.push('--cookies', COOKIES_PATH);
+        if (proxyUrl) args.push('--proxy', proxyUrl);
         
         const { stdout } = await execFileAsync(ytDlpPath, args, { timeout: 45_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
         const info = JSON.parse(stdout);
