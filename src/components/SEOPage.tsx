@@ -130,7 +130,23 @@ function SEOPageContent({ platform, title, subtitle, content, faqData }: SEOPage
         
         {loading && <LoadingState />}
         
-        {error && <ErrorAlert message={error} onClear={() => setError(null)} />}
+        {error && (
+          <ErrorAlert 
+            message={error} 
+            onClear={() => setError(null)} 
+            onRetry={() => {
+              if (videoUrl) {
+                handleSearch(videoUrl);
+              } else {
+                setError(null);
+              }
+            }}
+            onResetUrl={() => {
+              setVideoUrl("");
+              setError(null);
+            }}
+          />
+        )}
 
         {!isPremium && (
           <>

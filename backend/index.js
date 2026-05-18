@@ -79,6 +79,15 @@ if (fs.existsSync(COOKIES_PATH)) {
   cookiesActive = true;
 }
 
+// Caches & Rate limit structures
+const metadataCache = {};
+const METADATA_CACHE_TTL = 3600000; // 1 hour
+
+const downloadCache = {}; // Cache recently completed downloads
+
+let activeDownloads = 0;
+const MAX_CONCURRENT_DOWNLOADS = parseInt(process.env.MAX_CONCURRENT_DOWNLOADS || '2', 10);
+
 const ytDlpWrapper = createYtDlp(YT_DLP_BIN);
 
 function getYtDlpArgs(customArgs = {}) {
@@ -90,6 +99,8 @@ function getYtDlpArgs(customArgs = {}) {
     fragmentRetries: 3,
     retrySleep: 3,
     socketTimeout: 30,
+    sleepInterval: 2,
+    maxSleepInterval: 5,
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     addHeader: "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
     jsRuntimes: "node",
@@ -98,6 +109,12 @@ function getYtDlpArgs(customArgs = {}) {
 
   if (fs.existsSync(COOKIES_PATH)) {
     baseArgs.cookies = COOKIES_PATH;
+  }
+
+  const proxyUrl = process.env.YTDLP_PROXY_URL || process.env.PROXY_URL;
+  if (proxyUrl) {
+    console.log(`🌐 [ViralAuthority Engine] Appending proxy: ${proxyUrl}`);
+    baseArgs.proxy = proxyUrl;
   }
 
   return baseArgs;
@@ -333,6 +350,12 @@ app.post('/info', async (req, res) => {
   console.log(`🛠️ YT-DLP BIN: ${YT_DLP_BIN}`);
   console.log(`🛠️ FFmpeg BIN: ${FFMPEG_BIN}`);
 
+  // Check Metadata Cache
+  if (metadataCache[cleanUrl] && (Date.now() - metadataCache[cleanUrl].timestamp < METADATA_CACHE_TTL)) {
+    console.log(`⚡ [ViralAuthority Engine] Serving metadata from cache for: ${cleanUrl}`);
+    return res.json(metadataCache[cleanUrl].data);
+  }
+
   try {
     const args = getYtDlpArgs({
       dumpSingleJson: true,
@@ -356,6 +379,12 @@ app.post('/info', async (req, res) => {
       formats: prioritizeFormats(data.formats || [])
     };
 
+    // Save to Cache
+    metadataCache[cleanUrl] = {
+      timestamp: Date.now(),
+      data: info
+    };
+
     res.json(info);
   } catch (error) {
     console.error("❌ Info Fetching Error:", error.message);
@@ -372,7 +401,7 @@ app.post('/info', async (req, res) => {
         errorMessage.includes("temporarily blocked")) {
       return res.status(429).json({ 
         error: "YOUTUBE_RATE_LIMITED",
-        message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video." 
+        message: "YouTube limitó temporalmente esta solicitud. Puedes intentar de nuevo en unos minutos, usar otro enlace o subir el archivo directamente." 
       });
     }
 
@@ -411,6 +440,34 @@ app.post('/download', async (req, res) => {
   console.log(`🛠️ YT-DLP BIN: ${YT_DLP_BIN}`);
   console.log(`🛠️ FFmpeg BIN: ${FFMPEG_BIN}`);
 
+  const downloadCacheKey = `${url.trim()}_${formatId}`;
+
+  // 1. Download Cache Lookup (< 10 minutes)
+  if (downloadCache[downloadCacheKey] && (Date.now() - downloadCache[downloadCacheKey].timestamp < 600000)) {
+    const cached = downloadCache[downloadCacheKey];
+    const cachedFilePath = path.join(DOWNLOADS_DIR, cached.targetFile);
+    if (fs.existsSync(cachedFilePath)) {
+      console.log(`⚡ [ViralAuthority PRO PREMIUM Engine] Serving download from cache: ${cached.targetFile}`);
+      return res.json({ 
+        url: `/download-file?file=${encodeURIComponent(cached.targetFile)}&name=${encodeURIComponent(cached.finalUserFileName)}`, 
+        fileName: cached.finalUserFileName,
+        success: true,
+        message: `Archivo listo (desde caché): ${cached.finalUserFileName}`
+      });
+    }
+  }
+
+  // 2. Concurrency Limit Check
+  if (activeDownloads >= MAX_CONCURRENT_DOWNLOADS) {
+    console.log(`⚠️ [ViralAuthority Engine] Concurrency limit reached (${activeDownloads}/${MAX_CONCURRENT_DOWNLOADS}). Blocking new request.`);
+    return res.status(429).json({
+      error: "SERVER_BUSY",
+      message: "El servidor de descargas está ocupado en este momento procesando otras solicitudes. Por favor, intenta de nuevo en unos segundos."
+    });
+  }
+
+  activeDownloads++;
+
   // Cleanup old files (> 1 hour)
   try {
     const now = Date.now();
@@ -426,20 +483,44 @@ app.post('/download', async (req, res) => {
     console.error("Cleanup error:", err);
   }
 
-  try {
-    const isAudio = formatId.startsWith('audio_');
-    const timestamp = Date.now();
+  const isAudio = formatId.startsWith('audio_');
+  const timestamp = Date.now();
 
-    const robustFlags = ` --no-playlist --extractor-retries 3 --fragment-retries 3 --retry-sleep 3 --socket-timeout 30 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" --add-header "Accept-Language: es-ES,es;q=0.9,en;q=0.8" --js-runtimes node`;
+  const saveAndServe = (internalBase, finalUserFile) => {
+    activeDownloads = Math.max(0, activeDownloads - 1);
+    try {
+      const files = fs.readdirSync(DOWNLOADS_DIR);
+      const targetFile = files.find(f => f.startsWith(internalBase) && (f.endsWith('.mp4') || f.endsWith('.mp3')));
+      if (targetFile) {
+        downloadCache[downloadCacheKey] = {
+          timestamp: Date.now(),
+          targetFile,
+          finalUserFileName: finalUserFile
+        };
+      }
+    } catch (e) {
+      console.error("Cache save error:", e);
+    }
+    handleFinalFile(internalBase, isAudio, finalUserFile, res);
+  };
+
+  try {
+    const robustFlags = ` --no-playlist --sleep-interval 2 --max-sleep-interval 5 --extractor-retries 3 --fragment-retries 3 --retry-sleep 3 --socket-timeout 30 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" --add-header "Accept-Language: es-ES,es;q=0.9,en;q=0.8" --js-runtimes node`;
     
     let cookiesFlag = "";
     const cookiesExist = fs.existsSync(COOKIES_PATH);
     if (cookiesExist) {
       cookiesFlag = ` --cookies "${COOKIES_PATH}"`;
     }
+
+    let proxyFlag = "";
+    const proxyUrl = process.env.YTDLP_PROXY_URL || process.env.PROXY_URL;
+    if (proxyUrl) {
+      proxyFlag = ` --proxy "${proxyUrl}"`;
+    }
     
     console.log(`🛠️ Fetching title for download naming...`);
-    const info = await execPromise(`"${YT_DLP_BIN}" --print "%(title)s"${robustFlags}${cookiesFlag} "${url}"`);
+    const info = await execPromise(`"${YT_DLP_BIN}" --print "%(title)s"${robustFlags}${cookiesFlag}${proxyFlag} "${url}"`);
     const rawTitle = info.stdout.trim() || "video";
     const safeTitle = sanitizeFileName(rawTitle);
     
@@ -462,14 +543,12 @@ app.post('/download', async (req, res) => {
     console.log(`[DOWNLOAD] qualityLabel: ${qualityLabel}`);
     console.log(`[DOWNLOAD] outputTemplate: ${outputTemplate}`);
     console.log(`[DOWNLOAD] cookiesEnabled: ${cookiesExist}`);
-    console.log(`[DOWNLOAD] cookiesPath: ${COOKIES_PATH}`);
+    console.log(`[DOWNLOAD] proxyEnabled: ${!!proxyUrl}`);
 
     let command = "";
     if (isAudio) {
-      // Audio MP3 PREMIUM/FREE based on bitrate
       command = `"${YT_DLP_BIN}" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${outputTemplate}" "${url}"`;
     } else {
-      // Video MP4 with strict quality requirements
       let formatStr = "";
       if (qualityLabel.includes('360')) {
         formatStr = 'bestvideo[height<=360]+bestaudio/best[height<=360]/best';
@@ -492,8 +571,8 @@ app.post('/download', async (req, res) => {
 
     command += robustFlags;
     command += cookiesFlag;
+    command += proxyFlag;
     
-    // Only pass --ffmpeg-location if it's an absolute path
     if (FFMPEG_BIN && FFMPEG_BIN !== 'ffmpeg' && FFMPEG_BIN !== 'ffmpeg.exe') {
       command += ` --ffmpeg-location "${FFMPEG_BIN}"`;
     }
@@ -505,8 +584,6 @@ app.post('/download', async (req, res) => {
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Exec Error:", error);
         console.error(`[DOWNLOAD ERROR] code: ${error.code || 'N/A'}`);
         console.error(`[DOWNLOAD ERROR] stderr: ${stderr || 'N/A'}`);
-        console.error(`[DOWNLOAD ERROR] stdout: ${stdout || 'N/A'}`);
-        console.error(`[DOWNLOAD ERROR] error: ${error.message || error}`);
         
         const errText = stderr || error.message || "";
         if (
@@ -517,20 +594,21 @@ app.post('/download', async (req, res) => {
           errText.includes("unable to download webpage") ||
           errText.includes("temporarily blocked")
         ) {
+          activeDownloads = Math.max(0, activeDownloads - 1);
           return res.status(429).json({ 
             error: "YOUTUBE_RATE_LIMITED",
-            message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+            message: "YouTube limitó temporalmente esta solicitud. Puedes intentar de nuevo en unos minutos, usar otro enlace o subir el archivo directamente."
           });
         }
         
         // RE-TRY WITH SIMPLE FORMAT IF IT FAILED (for platforms like Pinterest)
         if (!isAudio && !command.includes('-f best')) {
           console.log("🔄 [ViralAuthority PRO PREMIUM Engine] Retrying with simple format...");
-          const simpleCommand = `"${YT_DLP_BIN}" -f best --merge-output-format mp4 -o "${outputTemplate}" "${url}" --ffmpeg-location "${FFMPEG_BIN}"${robustFlags}${cookiesFlag}`;
+          const simpleCommand = `"${YT_DLP_BIN}" -f best --merge-output-format mp4 -o "${outputTemplate}" "${url}" --ffmpeg-location "${FFMPEG_BIN}"${robustFlags}${cookiesFlag}${proxyFlag}`;
           return exec(simpleCommand, { shell: true }, (error2, stdout2, stderr2) => {
             if (error2) {
+               activeDownloads = Math.max(0, activeDownloads - 1);
                console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Exec Error:", error2);
-               console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Stderr:", stderr2);
                
                const errText2 = stderr2 || error2.message || "";
                if (
@@ -543,22 +621,24 @@ app.post('/download', async (req, res) => {
                ) {
                  return res.status(429).json({ 
                    error: "YOUTUBE_RATE_LIMITED",
-                   message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+                   message: "YouTube limitó temporalmente esta solicitud. Puedes intentar de nuevo en unos minutos, usar otro enlace o subir el archivo directamente."
                  });
                }
-               return res.status(500).json({ error: "Download/Conversion failed after retry." });
+               return res.status(500).json({ error: "Download failed after fallback retry." });
             }
-            handleFinalFile(internalFileBase, isAudio, finalUserFileName, res);
+            saveAndServe(internalFileBase, finalUserFileName);
           });
         }
         
-        return res.status(500).json({ error: "Download/Conversion failed." });
+        activeDownloads = Math.max(0, activeDownloads - 1);
+        return res.status(500).json({ error: "Download failed during engine execution." });
       }
 
-      handleFinalFile(internalFileBase, isAudio, finalUserFileName, res);
+      saveAndServe(internalFileBase, finalUserFileName);
     });
 
   } catch (error) {
+    activeDownloads = Math.max(0, activeDownloads - 1);
     console.error("Download Processing Error:", error);
     const errText = error.stderr || error.message || "";
     if (
@@ -571,10 +651,10 @@ app.post('/download', async (req, res) => {
     ) {
       return res.status(429).json({ 
         error: "YOUTUBE_RATE_LIMITED",
-        message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+        message: "YouTube limitó temporalmente esta solicitud. Puedes intentar de nuevo en unos minutos, usar otro enlace o subir el archivo directamente."
       });
     }
-    res.status(500).json({ error: "Download failed." });
+    res.status(500).json({ error: "Download failed during initialization." });
   }
 });
 
