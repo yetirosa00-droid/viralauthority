@@ -44,3 +44,8 @@ backend/downloads
 next-env.d.ts
 
 .vercel
+
+# cookies & credentials
+cookies/
+*.cookies.txt
+youtube.txt

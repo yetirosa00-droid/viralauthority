@@ -37,7 +37,16 @@ const winFfmpeg = "ffmpeg";
 env.allowLocalModels = false;
 env.useBrowserCache = false;
 
-const COOKIES_PATH = process.env.COOKIES_PATH || path.join(process.cwd(), "backend", "cookies.txt");
+const COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || process.env.COOKIES_PATH || path.join(process.cwd(), "backend", "cookies.txt");
+
+// In-memory cache to prevent spamming YouTube and backend API
+const durationCache = new Map<string, { duration: number, timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
+
+// Basic IP/Rate Limiting track in-memory
+const ipRequestLog = new Map<string, number[]>();
+const MAX_REQ_PER_WINDOW = 5;
+const WINDOW_MS = 60 * 1000; // 1 minute
 
 type Segment = { start: number; end: number; text: string };
 type WhisperChunk = { text?: string; timestamp?: [number, number] | number[] };
@@ -92,21 +101,73 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Fallo critico en el motor de transcripcion.";
 }
 
-async function getRemoteDuration(url: string, ytDlpPath: string) {
-  const args = [url, "--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings"];
+async function getRemoteDuration(url: string, ytDlpPath: string): Promise<number> {
+  const cleanUrl = url.trim();
+  const now = Date.now();
   
-  if (fs.existsSync(COOKIES_PATH)) {
+  // Cache check
+  const cached = durationCache.get(cleanUrl);
+  if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+    console.log(`[YTDLP CACHE] Hit for duration: ${cleanUrl} -> ${cached.duration}s`);
+    return cached.duration;
+  }
+
+  const cookiesEnabled = fs.existsSync(COOKIES_PATH);
+  const args = [
+    cleanUrl,
+    "--dump-single-json",
+    "--no-playlist",
+    "--skip-download",
+    "--no-warnings",
+    "--extractor-retries", "3",
+    "--fragment-retries", "3",
+    "--retry-sleep", "3",
+    "--socket-timeout", "30",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "--add-header", "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
+    "--js-runtimes", "node"
+  ];
+  
+  if (cookiesEnabled) {
     args.push("--cookies", COOKIES_PATH);
   }
 
-  const { stdout } = await execFileAsync(
-    ytDlpPath,
-    args,
-    { timeout: 45_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true },
-  );
+  console.log("[YTDLP] URL:", cleanUrl);
+  console.log("[YTDLP] yt-dlp path:", ytDlpPath);
+  console.log("[YTDLP] cookies enabled:", cookiesEnabled);
+  console.log("[YTDLP] cookies path:", COOKIES_PATH);
+  console.log("[YTDLP] command args:", args);
 
-  const info = JSON.parse(stdout);
-  return typeof info.duration === "number" ? info.duration : 0;
+  try {
+    const { stdout } = await execFileAsync(
+      ytDlpPath,
+      args,
+      { timeout: 45_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true },
+    );
+  
+    const info = JSON.parse(stdout);
+    const duration = typeof info.duration === "number" ? info.duration : 0;
+    
+    // Store in cache
+    durationCache.set(cleanUrl, { duration, timestamp: now });
+    return duration;
+  } catch (error: any) {
+    console.error("[YTDLP ERROR] code:", error.code);
+    console.error("[YTDLP ERROR] stderr:", error.stderr || error.message);
+    
+    const stderr = error.stderr || error.message || "";
+    if (
+      stderr.includes("Sign in to confirm you’re not a bot") ||
+      stderr.includes("HTTP Error 429") ||
+      stderr.includes("Too Many Requests") ||
+      stderr.includes("The request is blocked") ||
+      stderr.includes("unable to download webpage") ||
+      stderr.includes("temporarily blocked")
+    ) {
+      throw new Error("YOUTUBE_RATE_LIMITED");
+    }
+    throw error;
+  }
 }
 
 function formatTranscription(output: WhisperOutput): { text: string, segments: Segment[] } {
@@ -208,9 +269,120 @@ ${text}`;
   return cleaned;
 }
 
+async function downloadAudioWithFallback(
+  url: string,
+  tempFilePath: string,
+  ytDlpPath: string,
+  ffmpegPath: string
+): Promise<void> {
+  const cleanUrl = url.trim();
+  const cookiesEnabled = fs.existsSync(COOKIES_PATH);
+  
+  // Base robust arguments
+  const baseArgs = [
+    cleanUrl,
+    "-x",
+    "--audio-format", "mp3",
+    "--audio-quality", "128K",
+    "--postprocessor-args", "-ar 16000 -ac 1",
+    "-o", tempFilePath.replace(".mp3", ""),
+    "--no-playlist",
+    "--no-warnings",
+    "--extractor-retries", "3",
+    "--fragment-retries", "3",
+    "--retry-sleep", "3",
+    "--socket-timeout", "30",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "--add-header", "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
+    "--js-runtimes", "node"
+  ];
+
+  if (ffmpegPath && ffmpegPath !== 'ffmpeg' && ffmpegPath !== 'ffmpeg.exe') {
+    baseArgs.push("--ffmpeg-location", ffmpegPath);
+  }
+
+  console.log("[YTDLP DOWNLOAD] URL:", cleanUrl);
+  console.log("[YTDLP DOWNLOAD] output path:", tempFilePath);
+  console.log("[YTDLP DOWNLOAD] cookies enabled:", cookiesEnabled);
+
+  // Attempt 1: Normal download with full formatting
+  try {
+    const args1 = [...baseArgs, "-f", "bestaudio/best"];
+    if (cookiesEnabled) args1.push("--cookies", COOKIES_PATH);
+    
+    console.log("[YTDLP DOWNLOAD ATTEMPT 1] args:", args1);
+    await execFileAsync(ytDlpPath, args1, { 
+      timeout: 240_000, 
+      maxBuffer: 1024 * 1024 * 8, 
+      windowsHide: true 
+    });
+    return;
+  } catch (err1: any) {
+    console.warn("[YTDLP DOWNLOAD ATTEMPT 1 FAILED]:", err1.stderr || err1.message);
+    const errText = err1.stderr || err1.message || "";
+    if (
+      errText.includes("Sign in to confirm you’re not a bot") ||
+      errText.includes("HTTP Error 429") ||
+      errText.includes("Too Many Requests") ||
+      errText.includes("The request is blocked") ||
+      errText.includes("unable to download webpage") ||
+      errText.includes("temporarily blocked")
+    ) {
+      throw new Error("YOUTUBE_RATE_LIMITED");
+    }
+  }
+
+  // Attempt 2: Simpler format fallback
+  try {
+    const args2 = [...baseArgs, "-f", "best"];
+    if (cookiesEnabled) args2.push("--cookies", COOKIES_PATH);
+    
+    console.log("[YTDLP DOWNLOAD ATTEMPT 2 (Fallback)] args:", args2);
+    await execFileAsync(ytDlpPath, args2, { 
+      timeout: 240_000, 
+      maxBuffer: 1024 * 1024 * 8, 
+      windowsHide: true 
+    });
+    return;
+  } catch (err2: any) {
+    console.error("[YTDLP DOWNLOAD ATTEMPT 2 FAILED]:", err2.stderr || err2.message);
+    const errText = err2.stderr || err2.message || "";
+    if (
+      errText.includes("Sign in to confirm you’re not a bot") ||
+      errText.includes("HTTP Error 429") ||
+      errText.includes("Too Many Requests") ||
+      errText.includes("The request is blocked") ||
+      errText.includes("unable to download webpage") ||
+      errText.includes("temporarily blocked")
+    ) {
+      throw new Error("YOUTUBE_RATE_LIMITED");
+    }
+    throw err2;
+  }
+}
+
 export async function POST(request: Request) {
   let tempFilePath = "";
   const tempFilesToCleanup: string[] = [];
+
+  // Enforce Basic IP Rate Limiting
+  const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown-ip";
+  const now = Date.now();
+  const timestamps = ipRequestLog.get(ip) || [];
+  const recentTimestamps = timestamps.filter(t => now - t < WINDOW_MS);
+  recentTimestamps.push(now);
+  ipRequestLog.set(ip, recentTimestamps);
+
+  if (recentTimestamps.length > MAX_REQ_PER_WINDOW) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "RATE_LIMIT_EXCEEDED",
+        message: "Has realizado demasiadas solicitudes en poco tiempo. Por favor, espera un minuto antes de intentar de nuevo."
+      },
+      { status: 429 }
+    );
+  }
 
   try {
     let formData: FormData;
@@ -300,47 +472,10 @@ export async function POST(request: Request) {
       } catch (e: unknown) {
         const message = getErrorMessage(e);
         console.warn("[ViralAuthority PRO PREMIUM AI] URL info check failed, continuing...", message);
-        if (message.includes("Upgrade") || message.includes("Premium")) throw e;
+        if (message.includes("Upgrade") || message.includes("Premium") || message === "YOUTUBE_RATE_LIMITED") throw e;
       }
 
-      try {
-        const args = [
-          url,
-          "-f", "bestaudio/best",
-          "-x",
-          "--audio-format", "mp3",
-          "--audio-quality", "128K",
-          "--postprocessor-args", "-ar 16000 -ac 1",
-          "-o", tempFilePath.replace(".mp3", ""),
-          "--no-playlist",
-          "--no-warnings",
-        ];
-
-        if (ffmpegPath && ffmpegPath !== 'ffmpeg' && ffmpegPath !== 'ffmpeg.exe') {
-          args.push("--ffmpeg-location", ffmpegPath);
-        }
-
-        if (fs.existsSync(COOKIES_PATH)) {
-          console.log("[ViralAuthority PRO PREMIUM AI] Using cookies for download...");
-          args.push("--cookies", COOKIES_PATH);
-        }
-
-        await execFileAsync(ytDlpPath, args, { 
-          timeout: 300_000, 
-          maxBuffer: 1024 * 1024 * 8, 
-          windowsHide: true 
-        });
-      } catch (e: any) {
-        console.error("[ViralAuthority PRO PREMIUM AI] YT-DLP Error:", e.message);
-        const errorMsg = e.message || "";
-        if (errorMsg.includes("Sign in to confirm you’re not a bot")) {
-          throw new Error("YouTube bloqueó temporalmente la solicitud. Intenta de nuevo en unos minutos.");
-        }
-        if (errorMsg.includes("Private video") || errorMsg.includes("video is private")) {
-          throw new Error("El video es privado y no puede ser procesado.");
-        }
-        throw new Error("Error al procesar el video. Verifica que el enlace sea público y válido.");
-      }
+      await downloadAudioWithFallback(url, tempFilePath, ytDlpPath, ffmpegPath);
     }
 
 
@@ -442,8 +577,20 @@ export async function POST(request: Request) {
     console.error("Transcription API Fatal Error:", error);
     cleanupFiles(tempFilesToCleanup);
 
+    const message = getErrorMessage(error);
+    if (message === "YOUTUBE_RATE_LIMITED") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "YOUTUBE_RATE_LIMITED",
+          message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { error: getErrorMessage(error) },
+      { error: message },
       { status: 500 }
     );
   }

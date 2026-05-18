@@ -56,7 +56,7 @@ const getBinPath = (binName) => {
 
 const YT_DLP_BIN = getBinPath('yt-dlp');
 const FFMPEG_BIN = getBinPath('ffmpeg');
-const COOKIES_PATH = process.env.COOKIES_PATH || path.join(__dirname, 'cookies.txt');
+const COOKIES_PATH = process.env.YTDLP_COOKIES_PATH || process.env.COOKIES_PATH || path.join(__dirname, 'cookies.txt');
 
 console.log(`🔍 [ViralAuthority Engine] YT-DLP: ${YT_DLP_BIN}`);
 console.log(`🔍 [ViralAuthority Engine] FFmpeg: ${FFMPEG_BIN}`);
@@ -86,10 +86,17 @@ function getYtDlpArgs(customArgs = {}) {
     noWarnings: true,
     noCheckCertificate: true,
     ffmpegLocation: FFMPEG_BIN,
+    extractorRetries: 3,
+    fragmentRetries: 3,
+    retrySleep: 3,
+    socketTimeout: 30,
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    addHeader: "Accept-Language: es-ES,es;q=0.9,en;q=0.8",
+    jsRuntimes: "node",
     ...customArgs
   };
 
-  if (cookiesActive && fs.existsSync(COOKIES_PATH)) {
+  if (fs.existsSync(COOKIES_PATH)) {
     baseArgs.cookies = COOKIES_PATH;
   }
 
@@ -356,6 +363,19 @@ app.post('/info', async (req, res) => {
     
     // Specifically handle common yt-dlp/video errors
     const errorMessage = error.stderr || error.message || "";
+    
+    if (errorMessage.includes("Sign in to confirm you’re not a bot") || 
+        errorMessage.includes("HTTP Error 429") || 
+        errorMessage.includes("Too Many Requests") || 
+        errorMessage.includes("The request is blocked") || 
+        errorMessage.includes("unable to download webpage") || 
+        errorMessage.includes("temporarily blocked")) {
+      return res.status(429).json({ 
+        error: "YOUTUBE_RATE_LIMITED",
+        message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video." 
+      });
+    }
+
     if (errorMessage.includes("Video unavailable") || errorMessage.includes("Incomplete YouTube ID")) {
       return res.status(404).json({ error: "El video no está disponible o el enlace está roto." });
     }
@@ -405,9 +425,16 @@ app.post('/download', async (req, res) => {
   try {
     const isAudio = formatId.startsWith('audio_');
     const timestamp = Date.now();
+
+    const robustFlags = ` --no-playlist --extractor-retries 3 --fragment-retries 3 --retry-sleep 3 --socket-timeout 30 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" --add-header "Accept-Language: es-ES,es;q=0.9,en;q=0.8" --js-runtimes node`;
+    
+    let cookiesFlag = "";
+    if (fs.existsSync(COOKIES_PATH)) {
+      cookiesFlag = ` --cookies "${COOKIES_PATH}"`;
+    }
     
     console.log(`🛠️ Fetching title for download naming...`);
-    const info = await execPromise(`"${YT_DLP_BIN}" --print "%(title)s" "${url}"`);
+    const info = await execPromise(`"${YT_DLP_BIN}" --print "%(title)s"${robustFlags}${cookiesFlag} "${url}"`);
     const rawTitle = info.stdout.trim() || "video";
     const safeTitle = sanitizeFileName(rawTitle);
     
@@ -451,9 +478,8 @@ app.post('/download', async (req, res) => {
       command = `"${YT_DLP_BIN}" -f "${formatStr}" --merge-output-format mp4 --recode-video mp4 -o "${outputTemplate}" "${url}"`;
     }
 
-    if (cookiesActive && fs.existsSync(COOKIES_PATH)) {
-      command += ` --cookies "${COOKIES_PATH}"`;
-    }
+    command += robustFlags;
+    command += cookiesFlag;
     
     // Only pass --ffmpeg-location if it's an absolute path
     if (FFMPEG_BIN && FFMPEG_BIN !== 'ffmpeg' && FFMPEG_BIN !== 'ffmpeg.exe') {
@@ -468,14 +494,44 @@ app.post('/download', async (req, res) => {
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Stdout:", stdout);
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Stderr:", stderr);
         
+        const errText = stderr || error.message || "";
+        if (
+          errText.includes("Sign in to confirm you’re not a bot") ||
+          errText.includes("HTTP Error 429") ||
+          errText.includes("Too Many Requests") ||
+          errText.includes("The request is blocked") ||
+          errText.includes("unable to download webpage") ||
+          errText.includes("temporarily blocked")
+        ) {
+          return res.status(429).json({ 
+            error: "YOUTUBE_RATE_LIMITED",
+            message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+          });
+        }
+        
         // RE-TRY WITH SIMPLE FORMAT IF IT FAILED (for platforms like Pinterest)
         if (!isAudio && !command.includes('-f best')) {
           console.log("🔄 [ViralAuthority PRO PREMIUM Engine] Retrying with simple format...");
-          const simpleCommand = `"${YT_DLP_BIN}" -f best --merge-output-format mp4 -o "${outputTemplate}" "${url}" --ffmpeg-location "${FFMPEG_BIN}"`;
+          const simpleCommand = `"${YT_DLP_BIN}" -f best --merge-output-format mp4 -o "${outputTemplate}" "${url}" --ffmpeg-location "${FFMPEG_BIN}"${robustFlags}${cookiesFlag}`;
           return exec(simpleCommand, { shell: true }, (error2, stdout2, stderr2) => {
             if (error2) {
                console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Exec Error:", error2);
                console.error("❌ [ViralAuthority PRO PREMIUM Engine] Retry Stderr:", stderr2);
+               
+               const errText2 = stderr2 || error2.message || "";
+               if (
+                 errText2.includes("Sign in to confirm you’re not a bot") ||
+                 errText2.includes("HTTP Error 429") ||
+                 errText2.includes("Too Many Requests") ||
+                 errText2.includes("The request is blocked") ||
+                 errText2.includes("unable to download webpage") ||
+                 errText2.includes("temporarily blocked")
+               ) {
+                 return res.status(429).json({ 
+                   error: "YOUTUBE_RATE_LIMITED",
+                   message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+                 });
+               }
                return res.status(500).json({ error: "Download/Conversion failed after retry." });
             }
             handleFinalFile(internalFileBase, isAudio, finalUserFileName, res);
@@ -490,6 +546,20 @@ app.post('/download', async (req, res) => {
 
   } catch (error) {
     console.error("Download Processing Error:", error);
+    const errText = error.stderr || error.message || "";
+    if (
+      errText.includes("Sign in to confirm you’re not a bot") ||
+      errText.includes("HTTP Error 429") ||
+      errText.includes("Too Many Requests") ||
+      errText.includes("The request is blocked") ||
+      errText.includes("unable to download webpage") ||
+      errText.includes("temporarily blocked")
+    ) {
+      return res.status(429).json({ 
+        error: "YOUTUBE_RATE_LIMITED",
+        message: "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video."
+      });
+    }
     res.status(500).json({ error: "Download failed." });
   }
 });
