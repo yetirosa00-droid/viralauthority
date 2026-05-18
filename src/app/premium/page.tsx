@@ -41,7 +41,7 @@ export default function PremiumPage() {
   }, []);
 
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim();
-  const planAmount = billingCycle === "yearly" ? "95.00" : "7.99";
+  const planAmount = billingCycle === "yearly" ? "139.99" : "14.99";
 
   const handlePaymentSuccess = async (details: any) => {
     console.log("Payment Successful:", details);

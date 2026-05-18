@@ -454,7 +454,11 @@ app.post('/download', async (req, res) => {
     if (cookiesActive && fs.existsSync(COOKIES_PATH)) {
       command += ` --cookies "${COOKIES_PATH}"`;
     }
-    command += ` --ffmpeg-location "${FFMPEG_BIN}"`;
+    
+    // Only pass --ffmpeg-location if it's an absolute path
+    if (FFMPEG_BIN && FFMPEG_BIN !== 'ffmpeg' && FFMPEG_BIN !== 'ffmpeg.exe') {
+      command += ` --ffmpeg-location "${FFMPEG_BIN}"`;
+    }
 
     console.log(`🛠️ [ViralAuthority PRO PREMIUM Engine] Executing: ${command}`);
 

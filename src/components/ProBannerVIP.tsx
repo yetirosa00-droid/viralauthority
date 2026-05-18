@@ -31,10 +31,10 @@ export function ProBannerVIP() {
             <div className="space-y-1">
               <div className="flex items-center justify-center md:justify-start gap-3">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-300">ViralAuthority PRO PREMIUM Access</span>
-                <span className="px-2 py-0.5 rounded-md bg-white text-blue-600 text-[8px] font-black uppercase animate-pulse">45% OFF</span>
+                <span className="px-2 py-0.5 rounded-md bg-white text-blue-600 text-[8px] font-black uppercase animate-pulse">SAVE $40</span>
               </div>
               <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white leading-tight">
-                OFERTA ESPECIAL: <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">45% DE DESCUENTO</span>
+                OFERTA ESPECIAL: <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">AHORRA 40$ EN EL PLAN ANUAL</span>
               </h2>
               <div className="flex flex-wrap justify-center md:justify-start gap-4 pt-2">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-gray-200">

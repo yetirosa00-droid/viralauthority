@@ -48,9 +48,18 @@ type OpenAIVerboseTranscription = { text?: string; segments?: Segment[] };
 let transcriberWorker: TranscriberWorker | null = null;
 
 function getBinaryPaths() {
-  const ytDlpPath = path.normalize(process.env.YT_DLP_PATH || winYtDlp);
-  const ffmpegPath = path.normalize(process.env.FFMPEG_PATH || winFfmpeg);
-  const ffprobePath = process.env.FFPROBE_PATH
+  const envYtDlp = process.env.YT_DLP_PATH;
+  const envFfmpeg = process.env.FFMPEG_PATH;
+  
+  const ytDlpPath = (envYtDlp && fs.existsSync(envYtDlp)) 
+    ? path.normalize(envYtDlp) 
+    : winYtDlp;
+    
+  const ffmpegPath = (envFfmpeg && fs.existsSync(envFfmpeg)) 
+    ? path.normalize(envFfmpeg) 
+    : winFfmpeg;
+
+  const ffprobePath = process.env.FFPROBE_PATH && fs.existsSync(process.env.FFPROBE_PATH)
     ? path.normalize(process.env.FFPROBE_PATH)
     : ffmpegPath.replace(/ffmpeg(\.exe)?$/i, "ffprobe$1");
 
@@ -302,11 +311,14 @@ export async function POST(request: Request) {
           "--audio-format", "mp3",
           "--audio-quality", "128K",
           "--postprocessor-args", "-ar 16000 -ac 1",
-          "--ffmpeg-location", ffmpegPath,
           "-o", tempFilePath.replace(".mp3", ""),
           "--no-playlist",
           "--no-warnings",
         ];
+
+        if (ffmpegPath && ffmpegPath !== 'ffmpeg' && ffmpegPath !== 'ffmpeg.exe') {
+          args.push("--ffmpeg-location", ffmpegPath);
+        }
 
         if (fs.existsSync(COOKIES_PATH)) {
           console.log("[ViralAuthority PRO PREMIUM AI] Using cookies for download...");

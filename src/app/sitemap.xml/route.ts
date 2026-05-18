@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getAllBlogPosts } from "@/lib/blogData";
 
-const BASE_URL = "https://www.viralauthoritypro.com";
+const BASE_URL = "https://viralauthoritypro.com";
 
 const blogPosts = getAllBlogPosts();
 
