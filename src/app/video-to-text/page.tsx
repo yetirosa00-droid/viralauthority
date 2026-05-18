@@ -3,20 +3,21 @@
 import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-  import { 
-    FileText, 
-    Video,
-    Copy, 
-    Check, 
-    Download,
-    Sparkles, 
-    Clock, 
-    Languages, 
-    ShieldCheck,
-    Zap,
-    Loader2,
-    Activity
-  } from "lucide-react";
+import { 
+  FileText, 
+  Video,
+  Copy, 
+  Check, 
+  Download,
+  Sparkles, 
+  Clock, 
+  Languages, 
+  ShieldCheck,
+  Zap,
+  Loader2,
+  Activity,
+  Upload
+} from "lucide-react";
   import axios from "axios";
   import { useLanguage } from "@/context/LanguageContext";
   import { useUser } from "@/context/UserContext";
@@ -65,26 +66,7 @@ import { Footer } from "@/components/Footer";
     setImprovedTranscription(null);
     setSegments([]);
     setProgress(5);
-    setStatusMessage("Preparando procesamiento...");
-
-    // Progressive loading simulation
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev < 30) {
-          setStatusMessage("Procesando medios...");
-          return prev + 1;
-        }
-        if (prev < 70) {
-          setStatusMessage("Extrayendo capas de audio...");
-          return prev + 0.5;
-        }
-        if (prev < 95) {
-          setStatusMessage("Whisper AI Transcribiendo...");
-          return prev + 0.2;
-        }
-        return prev;
-      });
-    }, 200);
+    setStatusMessage("Inicializando cola de trabajo...");
 
     try {
       const formData = new FormData();
@@ -99,37 +81,102 @@ import { Footer } from "@/components/Footer";
         formData.append("userId", user.id);
       }
 
-      const response = await axios.post("/api/transcribe", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 300_000 // 5 minutes timeout for long videos
+      // 1. Create Job in Asynchronous Queue
+      const createResponse = await axios.post("/api/transcribe", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       });
 
-      clearInterval(progressInterval);
-      setProgress(100);
-      
-      setTimeout(() => {
-        const rawText = response.data.text || "";
+      const { jobId, status } = createResponse.data;
+
+      if (status === "completed" && createResponse.data.text) {
+        // Fast path for completed cache hits
+        setProgress(100);
+        const rawText = createResponse.data.text || "";
         setTranscription(rawText);
-        setImprovedTranscription(response.data.improved || rawText);
-        setSegments(response.data.segments || []);
+        setImprovedTranscription(createResponse.data.improved || rawText);
+        setSegments(createResponse.data.segments || []);
         setVideoUrl(url);
         if (file) setLocalFileUrl(URL.createObjectURL(file));
         setActiveTab("segments");
-        setStatusMessage("Transcripción completada");
+        setStatusMessage("Transcripción completada (Caché)");
         setLoading(false);
-      }, 500);
+        return;
+      }
+
+      // 2. Start polling the job status endpoint
+      const pollInterval = setInterval(async () => {
+        try {
+          const pollResponse = await axios.get(`/api/jobs/${jobId}`);
+          const { job } = pollResponse.data;
+
+          if (!job) {
+            clearInterval(pollInterval);
+            setError("Error: El trabajo solicitado no pudo ser rastreado.");
+            setLoading(false);
+            return;
+          }
+
+          // Dynamically map states to Spanish messages and progress bars
+          if (job.status === "pending") {
+            setProgress(10);
+            setStatusMessage("En cola de espera...");
+          } else if (job.status === "processing") {
+            setProgress(20);
+            setStatusMessage("Preparando motor de procesamiento...");
+          } else if (job.status === "downloading") {
+            setProgress(45);
+            setStatusMessage("Descargando audio de YouTube...");
+          } else if (job.status === "extracting_audio") {
+            setProgress(65);
+            setStatusMessage("Procesando pistas de audio (FFmpeg)...");
+          } else if (job.status === "transcribing") {
+            setProgress(85);
+            setStatusMessage("Whisper AI Transcribiendo...");
+          } else if (job.status === "completed") {
+            clearInterval(pollInterval);
+            setProgress(100);
+            setStatusMessage("Transcripción completada");
+
+            setTimeout(() => {
+              const rawText = job.resultText || "";
+              setTranscription(rawText);
+              setImprovedTranscription(job.improvedText || rawText);
+              setSegments(job.segments || []);
+              setVideoUrl(url);
+              if (file) setLocalFileUrl(URL.createObjectURL(file));
+              setActiveTab("segments");
+              setLoading(false);
+            }, 500);
+          } else if (job.status === "blocked_by_platform") {
+            clearInterval(pollInterval);
+            setError("Esta plataforma bloqueó temporalmente el procesamiento del enlace. Puedes intentar más tarde, usar otro enlace o subir el archivo directamente para transcribirlo.");
+            setStatusMessage("Fallo: Bloqueo de plataforma");
+            setLoading(false);
+          } else if (job.status === "failed") {
+            clearInterval(pollInterval);
+            setError(job.errorMessage || "Fallo en el procesamiento de audio.");
+            setStatusMessage("Fallo en el procesamiento");
+            setLoading(false);
+          }
+        } catch (pollErr: any) {
+          clearInterval(pollInterval);
+          console.error("Polling error:", pollErr);
+          setError("Error de comunicación durante el rastreo del progreso.");
+          setLoading(false);
+        }
+      }, 2500);
+
     } catch (err: any) {
-      clearInterval(progressInterval);
       console.error("Transcription error:", err);
-      let serverError = err.response?.data?.error || "Error de red";
+      let serverError = err.response?.data?.error || "Error al conectar con la cola.";
       const details = err.response?.data?.details;
       
       if (serverError === "YOUTUBE_RATE_LIMITED" || (err.response?.data?.message && err.response.data.message.includes("YouTube bloqueó"))) {
-        serverError = "YouTube bloqueó temporalmente la solicitud. Intenta nuevamente en unos minutos o prueba otro video.";
+        serverError = "Esta plataforma bloqueó temporalmente el procesamiento del enlace. Puedes intentar más tarde, usar otro enlace o subir el archivo directamente para transcribirlo.";
       }
       
       setError(details ? `${serverError}: ${details.substring(0, 100)}` : serverError);
-      setStatusMessage("Fallo en el procesamiento");
+      setStatusMessage("Fallo al iniciar cola");
       setLoading(false);
     }
   };
@@ -359,11 +406,27 @@ import { Footer } from "@/components/Footer";
 
           {/* Error Message */}
           {error && (
-            <div className="max-w-3xl mx-auto bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500 shrink-0">
-                <ShieldCheck size={20} />
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                  <ShieldCheck size={20} />
+                </div>
+                <div className="space-y-3 flex-1">
+                  <p className="text-red-200 font-medium pt-2">{error}</p>
+                  {(error.includes("plataforma bloqueó") || error.includes("YouTube bloqueó") || error.includes("límite")) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMode("file");
+                        setError(null);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-purple-500/20 mt-2"
+                    >
+                      <Upload size={14} className="mr-1 animate-bounce" /> Subir archivo directamente
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-red-200 font-medium pt-2">{error}</p>
             </div>
           )}
 

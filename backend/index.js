@@ -398,12 +398,16 @@ app.post('/info', async (req, res) => {
  * This handles the CORS and 403 errors by streaming THROUGH the VPS.
  */
 app.post('/download', async (req, res) => {
-  const { url, formatId, qualityLabel } = req.body;
+  const { url, formatId, qualityLabel: reqQualityLabel, quality } = req.body;
   if (!url || !formatId) return res.status(400).json({ error: "URL and formatId are required" });
+
+  const rawQuality = reqQualityLabel || quality || 'best';
+  const qualityLabel = String(rawQuality).trim();
 
   console.log(`🚀 [ViralAuthority PRO PREMIUM Engine] NEW DOWNLOAD REQUEST ---`);
   console.log(`🔗 URL: ${url}`);
   console.log(`📦 FormatID: ${formatId}`);
+  console.log(`🏷️ Quality Label: ${qualityLabel}`);
   console.log(`🛠️ YT-DLP BIN: ${YT_DLP_BIN}`);
   console.log(`🛠️ FFmpeg BIN: ${FFMPEG_BIN}`);
 
@@ -429,7 +433,8 @@ app.post('/download', async (req, res) => {
     const robustFlags = ` --no-playlist --extractor-retries 3 --fragment-retries 3 --retry-sleep 3 --socket-timeout 30 --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" --add-header "Accept-Language: es-ES,es;q=0.9,en;q=0.8" --js-runtimes node`;
     
     let cookiesFlag = "";
-    if (fs.existsSync(COOKIES_PATH)) {
+    const cookiesExist = fs.existsSync(COOKIES_PATH);
+    if (cookiesExist) {
       cookiesFlag = ` --cookies "${COOKIES_PATH}"`;
     }
     
@@ -446,11 +451,18 @@ app.post('/download', async (req, res) => {
     if (formatId === "audio_320") bitrate = "320";
 
     const extension = isAudio ? "mp3" : "mp4";
-    const qualityTag = isAudio ? `${bitrate}kbps` : (qualityLabel ? qualityLabel.replace(/\s+/g, '').toLowerCase() : 'best');
+    const qualityTag = isAudio ? `${bitrate}kbps` : qualityLabel.replace(/\s+/g, '').toLowerCase();
     const finalUserFileName = `${safeTitle}-${qualityTag}.${extension}`;
     
     const internalFileBase = `viralauthoritypro_${timestamp}_${safeTitle}`;
     const outputTemplate = path.join(DOWNLOADS_DIR, `${internalFileBase}.%(ext)s`);
+
+    console.log(`[DOWNLOAD] URL: ${url}`);
+    console.log(`[DOWNLOAD] selectedFormat: ${formatId}`);
+    console.log(`[DOWNLOAD] qualityLabel: ${qualityLabel}`);
+    console.log(`[DOWNLOAD] outputTemplate: ${outputTemplate}`);
+    console.log(`[DOWNLOAD] cookiesEnabled: ${cookiesExist}`);
+    console.log(`[DOWNLOAD] cookiesPath: ${COOKIES_PATH}`);
 
     let command = "";
     if (isAudio) {
@@ -459,20 +471,20 @@ app.post('/download', async (req, res) => {
     } else {
       // Video MP4 with strict quality requirements
       let formatStr = "";
-      if (qualityLabel === '360p') {
-        formatStr = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]';
-      } else if (qualityLabel === '720p') {
-        formatStr = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]';
-      } else if (qualityLabel === '1080p') {
-        formatStr = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]';
-      } else if (qualityLabel.includes('2K')) {
-        formatStr = 'bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/best[height<=1440][ext=mp4]/best[height<=1440]';
-      } else if (qualityLabel.includes('4K')) {
-        formatStr = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best[height<=2160]';
-      } else if (qualityLabel.includes('8K')) {
-        formatStr = 'bestvideo[height<=4320][ext=mp4]+bestaudio[ext=m4a]/best[height<=4320][ext=mp4]/best[height<=4320]';
+      if (qualityLabel.includes('360')) {
+        formatStr = 'bestvideo[height<=360]+bestaudio/best[height<=360]/best';
+      } else if (qualityLabel.includes('720')) {
+        formatStr = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
+      } else if (qualityLabel.includes('1080')) {
+        formatStr = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best';
+      } else if (qualityLabel.includes('2K') || qualityLabel.includes('1440')) {
+        formatStr = 'bestvideo[height<=1440]+bestaudio/best[height<=1440]/best';
+      } else if (qualityLabel.includes('4K') || qualityLabel.includes('2160')) {
+        formatStr = 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/best';
+      } else if (qualityLabel.includes('8K') || qualityLabel.includes('4320')) {
+        formatStr = 'bestvideo[height<=4320]+bestaudio/best[height<=4320]/best';
       } else {
-        formatStr = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+        formatStr = 'bestvideo+bestaudio/best';
       }
 
       command = `"${YT_DLP_BIN}" -f "${formatStr}" --merge-output-format mp4 --recode-video mp4 -o "${outputTemplate}" "${url}"`;
@@ -491,8 +503,10 @@ app.post('/download', async (req, res) => {
     exec(command, { shell: true }, (error, stdout, stderr) => {
       if (error) {
         console.error("❌ [ViralAuthority PRO PREMIUM Engine] Exec Error:", error);
-        console.error("❌ [ViralAuthority PRO PREMIUM Engine] Stdout:", stdout);
-        console.error("❌ [ViralAuthority PRO PREMIUM Engine] Stderr:", stderr);
+        console.error(`[DOWNLOAD ERROR] code: ${error.code || 'N/A'}`);
+        console.error(`[DOWNLOAD ERROR] stderr: ${stderr || 'N/A'}`);
+        console.error(`[DOWNLOAD ERROR] stdout: ${stdout || 'N/A'}`);
+        console.error(`[DOWNLOAD ERROR] error: ${error.message || error}`);
         
         const errText = stderr || error.message || "";
         if (
