@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
+const nextConfig: any = {
   // Required for @xenova/transformers and ONNX Runtime to work in NextJS API Routes
   serverExternalPackages: ["@xenova/transformers", "onnxruntime-node", "wavefile"],
   images: {

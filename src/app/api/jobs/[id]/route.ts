@@ -5,12 +5,10 @@ export const runtime = 'nodejs';
 
 export async function GET(
   request: Request,
-  props: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Safely unwrap Next.js dynamic route params
-    const resolvedParams = 'then' in props.params ? await props.params : props.params;
-    const { id } = resolvedParams;
+    const { id } = await params;
     
     const job = getJob(id);
 

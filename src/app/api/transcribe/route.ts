@@ -81,12 +81,23 @@ export async function POST(request: Request) {
 
     // A. Direct File Upload Path
     if (file) {
-      // Validate File size limits (Free: 25MB, Premium: 100MB)
-      const maxSize = userId ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
-      if (file.size > maxSize) {
-        const sizeLabel = userId ? '100MB' : '25MB';
+      // Validate File extension/format security
+      const allowedExtensions = ['.mp4', '.mov', '.mp3', '.wav', '.m4a'];
+      const fileExt = path.extname(file.name).toLowerCase();
+      if (!allowedExtensions.includes(fileExt)) {
         return NextResponse.json(
-          { error: `El archivo excede el límite de tamaño de ${sizeLabel}. Inicia sesión o mejora a Premium para mayor tamaño.` },
+          { error: 'Formato no compatible. Sube MP4, MOV, MP3, WAV o M4A.' },
+          { status: 400 }
+        );
+      }
+
+      // Validate File size limits (Free: 50MB, Premium: 500MB)
+      const isPremiumUser = !!userId;
+      const maxSize = isPremiumUser ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        const sizeLabel = isPremiumUser ? '500MB' : '50MB';
+        return NextResponse.json(
+          { error: `El archivo excede el límite de tamaño de ${sizeLabel} para usuarios ${isPremiumUser ? 'Premium' : 'Gratis'}.` },
           { status: 400 }
         );
       }
@@ -154,17 +165,6 @@ export async function POST(request: Request) {
         });
         
         // Update to completed instantly
-        const updated = createJob({ // Wait, let's just update the created job!
-          ...newJob,
-          status: 'completed',
-          progress: 100,
-          resultText: cached.resultText,
-          improvedText: cached.improvedText,
-          segments: cached.segments,
-          duration: cached.duration
-        });
-
-        // Let's call import of getJobs & saveJobs to patch directly, or use updateJob
         const { updateJob } = await import('@/lib/queue');
         updateJob(newJob.id, {
           status: 'completed',

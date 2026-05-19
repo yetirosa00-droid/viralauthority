@@ -283,9 +283,14 @@ async function processJob(job: Job) {
 
     if (job.filePath) {
       // File upload pipeline
-      console.log(`[Worker Job ${job.id}] Extracting audio from uploaded file: ${job.fileName}`);
+      const stats = fs.existsSync(job.filePath) ? fs.statSync(job.filePath) : null;
+      const fileSizeMB = stats ? (stats.size / (1024 * 1024)).toFixed(2) : 'unknown';
+      console.log(`[Worker Job ${job.id}] ARCHIVO RECIBIDO: ${job.fileName} | TAMAÑO: ${fileSizeMB} MB | TIPO: ${path.extname(job.fileName || '').toLowerCase()}`);
+      
+      console.log(`[Worker Job ${job.id}] Extrayendo audio de archivo subido: ${job.fileName}`);
       updateJob(job.id, { status: 'extracting_audio', progress: 15 });
       
+      console.log(`[Worker Job ${job.id}] INICIANDO EXTRACCIÓN DE AUDIO (FFmpeg)...`);
       await execFileAsync(ffmpegPath, [
         '-y',
         '-i', job.filePath,
@@ -295,8 +300,10 @@ async function processJob(job: Job) {
         '-b:a', '128k',
         audioOutputPath,
       ], { timeout: 240_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
+      console.log(`[Worker Job ${job.id}] EXTRACCIÓN DE AUDIO COMPLETADA CON ÉXITO.`);
       
       // Calculate real duration
+      let duration = 0;
       try {
         const { stdout } = await execFileAsync(ffprobePath, [
           '-v', 'error',
@@ -304,18 +311,29 @@ async function processJob(job: Job) {
           '-of', 'default=noprint_wrappers=1:nokey=1',
           job.filePath,
         ], { timeout: 30_000, maxBuffer: 1024 * 1024, windowsHide: true });
-        const duration = parseFloat(stdout);
+        duration = parseFloat(stdout);
         updateJob(job.id, { duration });
+        console.log(`[Worker Job ${job.id}] DURACIÓN CALCULADA: ${duration.toFixed(2)} segundos.`);
       } catch (e) {
         console.warn(`[Worker ffprobe Warning] Duration fetch failed`, e);
       }
       
+      if (duration > 0) {
+        const isPremiumUser = !!job.userId;
+        const maxDuration = isPremiumUser ? 3600 : 600;
+        if (duration > maxDuration) {
+          const limitLabel = isPremiumUser ? '60 minutos' : '10 minutos';
+          throw new Error(`El archivo supera el límite de duración permitido para usuarios ${isPremiumUser ? 'Premium' : 'Gratis'} (${limitLabel}).`);
+        }
+      }
+      
     } else if (job.url) {
       // YouTube/URL download pipeline
-      console.log(`[Worker Job ${job.id}] Downloading audio from URL: ${job.url}`);
+      console.log(`[Worker Job ${job.id}] Descargando audio desde URL: ${job.url}`);
       updateJob(job.id, { status: 'downloading', progress: 20 });
       
       // Fetch duration first
+      let duration = 0;
       try {
         const cookiesEnabled = fs.existsSync(COOKIES_PATH);
         const proxyUrl = process.env.YTDLP_PROXY_URL || process.env.PROXY_URL;
@@ -338,10 +356,20 @@ async function processJob(job: Job) {
         
         const { stdout } = await execFileAsync(ytDlpPath, args, { timeout: 45_000, maxBuffer: 1024 * 1024 * 8, windowsHide: true });
         const info = JSON.parse(stdout);
-        const duration = typeof info.duration === 'number' ? info.duration : 0;
+        duration = typeof info.duration === 'number' ? info.duration : 0;
         updateJob(job.id, { duration });
+        console.log(`[Worker Job ${job.id}] DURACIÓN CALCULADA (URL): ${duration.toFixed(2)} segundos.`);
       } catch (e) {
         console.warn(`[Worker YTDLP Warning] Duration fetch failed`, e);
+      }
+      
+      if (duration > 0) {
+        const isPremiumUser = !!job.userId;
+        const maxDuration = isPremiumUser ? 3600 : 600;
+        if (duration > maxDuration) {
+          const limitLabel = isPremiumUser ? '60 minutos' : '10 minutos';
+          throw new Error(`El recurso supera el límite de duración permitido para usuarios ${isPremiumUser ? 'Premium' : 'Gratis'} (${limitLabel}).`);
+        }
       }
       
       updateJob(job.id, { progress: 40 });
@@ -442,7 +470,7 @@ async function processJob(job: Job) {
       segments
     });
     
-    console.log(`[Worker Job Success] Job ${job.id} completed!`);
+    console.log(`[Worker Job Success] Job ${job.id} completed! TRANSCRIPCIÓN COMPLETADA.`);
 
   } catch (error: any) {
     console.error(`[Worker Job Error] Job ${job.id} failed:`, error);
@@ -461,13 +489,14 @@ async function processJob(job: Job) {
     }
   } finally {
     // Delete any generated temp files
+    console.log(`[Worker Cleanup Job ${job.id}] Iniciando limpieza de archivos temporales...`);
     cleanupFiles(tempFilesToCleanup);
     
     // Also cleanup job uploaded source file to preserve VPS disk space
     if (job.filePath && fs.existsSync(job.filePath)) {
       try {
         fs.unlinkSync(job.filePath);
-        console.log(`[Worker Cleanup] Cleaned up uploaded source file: ${job.filePath}`);
+        console.log(`[Worker Cleanup Job ${job.id}] LIMPIEZA REALIZADA: Se eliminó el archivo de origen subido: ${job.filePath}`);
       } catch (e) {
         console.warn(`[Worker Cleanup Warning] Uploaded source file delete failed`, e);
       }
